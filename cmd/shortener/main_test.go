@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/achufistov/shortygopher.git/cmd/shortener/config"
+	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/go-chi/chi/v5"
 )
 
