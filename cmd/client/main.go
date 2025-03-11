@@ -28,13 +28,14 @@ func main() {
 
 	// Валидация URL
 	if long == "" {
-		panic("URL не может быть пустым")
+		log.Fatalf("URL не может быть пустым")
 	}
 
 	_, err = url.ParseRequestURI(long)
 	if err != nil {
-		panic("Некорректный URL")
+		log.Fatalf("Некорректный URL: %v", err)
 	}
+
 	// заполняем контейнер данными
 	data.Set("url", long)
 	// добавляем HTTP-клиент
@@ -44,14 +45,14 @@ func main() {
 	// тело должно быть источником потокового чтения io.Reader
 	request, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Ошибка создания запроса: %v", err)
 	}
 	// в заголовках запроса указываем кодировку
 	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	// отправляем запрос и получаем ответ
 	response, err := client.Do(request)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Ошибка отправки запроса: %v", err)
 	}
 	// выводим код ответа
 	fmt.Println("Статус-код ", response.Status)
@@ -59,7 +60,7 @@ func main() {
 	// читаем поток из тела ответа
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Ошибка чтения тела ответа: %v", err)
 	}
 	// и печатаем его
 	fmt.Println(string(body))
