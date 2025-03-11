@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,7 +22,7 @@ func main() {
 	// читаем строку из консоли
 	long, err := reader.ReadString('\n')
 	if err != nil {
-		panic(err)
+		log.Fatalf("Ошибка чтения URL: %v", err)
 	}
 	long = strings.TrimSuffix(long, "\n")
 	// заполняем контейнер данными
