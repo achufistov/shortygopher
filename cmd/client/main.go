@@ -25,6 +25,16 @@ func main() {
 		log.Fatalf("Ошибка чтения URL: %v", err)
 	}
 	long = strings.TrimSuffix(long, "\n")
+
+	// Валидация URL
+	if long == "" {
+		panic("URL не может быть пустым")
+	}
+
+	_, err = url.ParseRequestURI(long)
+	if err != nil {
+		panic("Некорректный URL")
+	}
 	// заполняем контейнер данными
 	data.Set("url", long)
 	// добавляем HTTP-клиент
