@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
+	"github.com/achufistov/shortygopher.git/internal/app/handlers"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -54,7 +56,9 @@ func Test_handlePost(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			handler := http.HandlerFunc(handlePost)
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandlePost(cfg, w, r)
+			})
 
 			handler.ServeHTTP(rr, req)
 
@@ -77,7 +81,7 @@ func Test_handleGet(t *testing.T) {
 	// Prepopulate the urlMap with a test URL
 	shortURL := "abc123"
 	originalURL := "https://example.com"
-	urlMap[shortURL] = originalURL
+	handlers.URLMap[shortURL] = originalURL
 
 	tests := []struct {
 		name           string
@@ -106,9 +110,11 @@ func Test_handleGet(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			rr := httptest.NewRecorder() // this test broke in the third increment
-			r := chi.NewRouter()         // to fix this problem, I used the chi router in this test so that the URL parameters were extracted correctly
-			r.Get("/{id}", handleGet)    // I've left the HandlerFunc() for the POST request in the same form so far
+			rr := httptest.NewRecorder()
+			r := chi.NewRouter() // to fix this problem, I used the chi router in this test so that the URL parameters were extracted correctly
+			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandleGet(cfg, w, r)
+			})
 
 			r.ServeHTTP(rr, req)
 
