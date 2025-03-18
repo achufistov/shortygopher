@@ -48,6 +48,9 @@ func main() {
 	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleGet(cfg, w, r)
 	})
+	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleShortenPost(cfg, w, r)
+	})
 
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))

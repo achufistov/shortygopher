@@ -132,3 +132,57 @@ func Test_handleGet(t *testing.T) {
 		})
 	}
 }
+
+func Test_handleShortenPost(t *testing.T) {
+	initConfig()
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		expectedStatus int
+		expectedJSON   string
+	}{
+		{
+			name:           "Valid POST request",
+			requestBody:    `{"url": "https://example.com "}`,
+			expectedStatus: http.StatusCreated,
+			expectedJSON:   `{"short_url":"` + cfg.BaseURL + `/`,
+		},
+		{
+			name:           "Invalid JSON",
+			requestBody:    `{"url": "invalid-url"`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("POST", "/api/shorten", bytes.NewBufferString(tt.requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandleShortenPost(cfg, w, r)
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+
+			if tt.expectedStatus == http.StatusCreated {
+				if !strings.HasPrefix(rr.Body.String(), tt.expectedJSON) {
+					t.Errorf("handler returned unexpected body: got %v want %v",
+						rr.Body.String(), tt.expectedJSON)
+				}
+			}
+		})
+	}
+}
