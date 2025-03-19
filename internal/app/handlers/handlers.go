@@ -21,11 +21,11 @@ var (
 )
 
 type ShortenRequest struct {
-	OriginalURL string `json:"original_url"`
+	OriginalURL string `json:"url"`
 }
 
 type ShortenResponse struct {
-	ShortURL string `json:"short_url"`
+	ShortURL string `json:"result"`
 }
 
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -62,10 +62,10 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if originalURL == "" {
-		http.Error(w, "Invalid URL", http.StatusInternalServerError)
-		return
-	}
+	// if originalURL == "" {
+	// 	http.Error(w, "Invalid URL", http.StatusInternalServerError)
+	// 	return
+	// }
 
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
