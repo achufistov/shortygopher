@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -34,12 +33,34 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	originalURL, err := readBody(r)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	var originalURL string
+
+	// Check for valid Content-Type
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") && !strings.Contains(contentType, "text/plain") {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
 
+	// Handle JSON requests
+	if strings.Contains(contentType, "application/json") {
+		var req ShortenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = req.OriginalURL
+	} else {
+		// Handle plain text requests
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = string(body)
+	}
+
+	// Generate a short URL and store it
 	shortURL := generateShortURL()
 	URLMap[shortURL] = originalURL
 
@@ -61,11 +82,6 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "URL not found", http.StatusNotFound)
 		return
 	}
-
-	// if originalURL == "" {
-	// 	http.Error(w, "Invalid URL", http.StatusInternalServerError)
-	// 	return
-	// }
 
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
@@ -96,20 +112,6 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
-
-}
-
-func readBody(r *http.Request) (string, error) {
-	if !strings.Contains(r.Header.Get("Content-Type"), "text/plain") {
-		return "", errors.New("invalid content type")
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(body), nil
 }
 
 func generateShortURL() string {
