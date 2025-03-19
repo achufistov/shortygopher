@@ -77,11 +77,6 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
-		return
-	}
-
 	var req ShortenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -101,7 +96,6 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
-
 }
 
 func readBody(r *http.Request) (string, error) {

@@ -41,7 +41,7 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.LoggingMiddleware(logger))
-	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.GzipMiddleware) // Добавляем Gzip middleware
 
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandlePost(cfg, w, r)
