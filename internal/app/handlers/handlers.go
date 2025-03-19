@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 
@@ -36,13 +37,13 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 
 	// Check for valid Content-Type
 	contentType := r.Header.Get("Content-Type")
-	if contentType != "application/json" && contentType != "text/plain" {
+	if !strings.Contains(contentType, "application/json") && !strings.Contains(contentType, "text/plain") {
 		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
 
 	// Handle JSON requests
-	if contentType == "application/json" {
+	if strings.Contains(contentType, "application/json") {
 		var req ShortenRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
