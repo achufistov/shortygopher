@@ -34,12 +34,27 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	originalURL, err := readBody(r)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+	var originalURL string
+
+	// Handle JSON requests
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		var req ShortenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = req.OriginalURL
+	} else {
+		// Handle plain text requests
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = string(body)
 	}
 
+	// Generate a short URL and store it
 	shortURL := generateShortURL()
 	URLMap[shortURL] = originalURL
 
