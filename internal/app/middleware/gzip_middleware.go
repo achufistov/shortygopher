@@ -22,13 +22,7 @@ func GzipMiddleware(next http.Handler) http.Handler {
 
 		// Проверяем, сжат ли запрос
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
-			// Проверяем, что Content-Type соответствует ожидаемому
-			if !strings.Contains(r.Header.Get("Content-Type"), "application/json") &&
-				!strings.Contains(r.Header.Get("Content-Type"), "text/plain") {
-				http.Error(w, "Unsupported Content-Type for gzip", http.StatusUnsupportedMediaType)
-				return
-			}
-
+			// Если Content-Type не соответствует ожидаемому, просто продолжим
 			gz, err := gzip.NewReader(r.Body)
 			if err != nil {
 				http.Error(w, "Failed to read gzip body", http.StatusBadRequest)
