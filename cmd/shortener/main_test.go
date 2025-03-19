@@ -146,7 +146,7 @@ func Test_handleShortenPost(t *testing.T) {
 			name:           "Valid POST request",
 			requestBody:    `{"url": "https://example.com "}`,
 			expectedStatus: http.StatusCreated,
-			expectedJSON:   `{"short_url":"` + cfg.BaseURL + `/`,
+			expectedJSON:   `{"result":"` + cfg.BaseURL + `/`,
 		},
 		{
 			name:           "Invalid JSON",
