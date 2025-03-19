@@ -62,6 +62,11 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if originalURL == "" {
+		http.Error(w, "Invalid URL", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
