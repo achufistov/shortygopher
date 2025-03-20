@@ -3,7 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
+	"github.com/achufistov/shortygopher.git/internal/app/storage"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -19,20 +20,55 @@ var (
 	URLMap = make(map[string]string)
 )
 
+type ShortenRequest struct {
+	OriginalURL string `json:"url"`
+}
+
+type ShortenResponse struct {
+	ShortURL string `json:"result"`
+}
+
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 		return
 	}
 
-	originalURL, err := readBody(r)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	var originalURL string
+
+	// Check for valid Content-Type
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") && !strings.Contains(contentType, "text/plain") {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
 
+	// Handle JSON requests
+	if strings.Contains(contentType, "application/json") {
+		var req ShortenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = req.OriginalURL
+	} else {
+		// Handle plain text requests
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		originalURL = string(body)
+	}
+
+	// Generate a short URL and store it
 	shortURL := generateShortURL()
 	URLMap[shortURL] = originalURL
+
+	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
@@ -57,17 +93,36 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
-func readBody(r *http.Request) (string, error) {
-	if !strings.Contains(r.Header.Get("Content-Type"), "text/plain") {
-		return "", errors.New("invalid content type")
+func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+		return
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", err
+	var req ShortenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
 	}
 
-	return string(body), nil
+	shortURL := generateShortURL()
+	URLMap[shortURL] = req.OriginalURL
+
+	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
+
+	resp := ShortenResponse{
+		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func generateShortURL() string {
