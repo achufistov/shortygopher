@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
+	"github.com/achufistov/shortygopher.git/internal/app/storage"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -64,6 +65,11 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	shortURL := generateShortURL()
 	URLMap[shortURL] = originalURL
 
+	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", cfg.BaseURL, shortURL)
@@ -101,6 +107,11 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 
 	shortURL := generateShortURL()
 	URLMap[shortURL] = req.OriginalURL
+
+	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
 
 	resp := ShortenResponse{
 		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),

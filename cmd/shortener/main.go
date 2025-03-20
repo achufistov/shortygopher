@@ -7,6 +7,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/storage"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -38,10 +39,16 @@ func main() {
 	}
 	defer logger.Sync()
 
+	URLMap, err = storage.LoadURLMappings(cfg.FileStorage)
+	if err != nil {
+		log.Printf("Error loading URL mappings: %v", err)
+		URLMap = make(map[string]string) // Initialize an empty card if the download failed
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.LoggingMiddleware(logger))
-	r.Use(middleware.GzipMiddleware) // Добавляем Gzip middleware
+	r.Use(middleware.GzipMiddleware)
 
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandlePost(cfg, w, r)
