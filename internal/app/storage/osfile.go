@@ -46,7 +46,7 @@ func LoadURLMappings(filePath string) (map[string]string, error) {
 
 // SaveURLMappings saves URLs to a file
 func SaveURLMappings(filePath string, urlMap map[string]string) error {
-	file, err := os.Create(filePath)
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
