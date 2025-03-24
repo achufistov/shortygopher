@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"os"
-	"strings"
 
 	"github.com/google/uuid"
 )
@@ -18,26 +17,26 @@ type URLMapping struct {
 func LoadURLMappings(filePath string) (map[string]string, error) {
 	urlMap := make(map[string]string)
 
-	// Проверяем, существует ли файл
+	// Checking if the file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		// Если файл не существует, возвращаем пустую карту
+		// If the file does not exist, we return an empty card
 		return urlMap, nil
 	}
 
+	// Reading the entire file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		var mapping URLMapping
-		if err := json.Unmarshal([]byte(line), &mapping); err != nil {
-			return nil, err
-		}
+	// Decoding an array of JSON objects
+	var mappings []URLMapping
+	if err := json.Unmarshal(data, &mappings); err != nil {
+		return nil, err
+	}
+
+	// Filling out the card
+	for _, mapping := range mappings {
 		urlMap[mapping.ShortURL] = mapping.OriginalURL
 	}
 
