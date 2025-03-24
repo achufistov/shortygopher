@@ -9,6 +9,7 @@ import (
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
+	"github.com/achufistov/shortygopher.git/internal/app/storage"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -17,12 +18,16 @@ func initConfig() {
 	var err error
 	cfg, err = config.LoadConfig()
 	if err != nil {
-		panic(err) // nil pointer dereference pass the fourth test
+		panic(err)
 	}
 }
 
 func Test_handlePost(t *testing.T) {
 	initConfig()
+
+	// Инициализируем URLStorage
+	urlStorage := storage.NewURLStorage()
+	handlers.InitURLStorage(urlStorage)
 
 	tests := []struct {
 		name           string
@@ -34,7 +39,7 @@ func Test_handlePost(t *testing.T) {
 			name:           "Valid POST request",
 			requestBody:    "https://example.com",
 			expectedStatus: http.StatusCreated,
-			expectedURL:    cfg.BaseURL + "/", // use cfg.BaseURL to pass the fifth test
+			expectedURL:    cfg.BaseURL + "/",
 		},
 		{
 			name:           "Invalid content type",
@@ -78,10 +83,15 @@ func Test_handlePost(t *testing.T) {
 }
 
 func Test_handleGet(t *testing.T) {
-	// Prepopulate the urlMap with a test URL
+	initConfig()
+
+	// Инициализируем URLStorage и добавляем тестовый URL
+	urlStorage := storage.NewURLStorage()
+	handlers.InitURLStorage(urlStorage)
+
 	shortURL := "abc123"
 	originalURL := "https://example.com"
-	handlers.URLMap[shortURL] = originalURL
+	urlStorage.AddURL(shortURL, originalURL)
 
 	tests := []struct {
 		name           string
@@ -111,7 +121,7 @@ func Test_handleGet(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			r := chi.NewRouter() // to fix this problem, I used the chi router in this test so that the URL parameters were extracted correctly
+			r := chi.NewRouter()
 			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				handlers.HandleGet(cfg, w, r)
 			})
@@ -136,6 +146,9 @@ func Test_handleGet(t *testing.T) {
 func Test_handleShortenPost(t *testing.T) {
 	initConfig()
 
+	urlStorage := storage.NewURLStorage()
+	handlers.InitURLStorage(urlStorage)
+
 	tests := []struct {
 		name           string
 		requestBody    string
@@ -144,7 +157,7 @@ func Test_handleShortenPost(t *testing.T) {
 	}{
 		{
 			name:           "Valid POST request",
-			requestBody:    `{"url": "https://example.com "}`,
+			requestBody:    `{"url": "https://example.com"}`,
 			expectedStatus: http.StatusCreated,
 			expectedJSON:   `{"result":"` + cfg.BaseURL + `/`,
 		},

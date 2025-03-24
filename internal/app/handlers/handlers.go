@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	URLMap = make(map[string]string)
+	urlStorage *storage.URLStorage
 )
 
 type ShortenRequest struct {
@@ -26,6 +26,10 @@ type ShortenRequest struct {
 
 type ShortenResponse struct {
 	ShortURL string `json:"result"`
+}
+
+func InitURLStorage(storage *storage.URLStorage) {
+	urlStorage = storage
 }
 
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -63,9 +67,9 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 
 	// Generate a short URL and store it
 	shortURL := generateShortURL()
-	URLMap[shortURL] = originalURL
+	urlStorage.AddURL(shortURL, originalURL)
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
@@ -82,7 +86,7 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	originalURL, exists := URLMap[id]
+	originalURL, exists := urlStorage.GetURL(id)
 
 	if !exists {
 		http.Error(w, "URL not found", http.StatusNotFound)
@@ -106,9 +110,9 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 
 	shortURL := generateShortURL()
-	URLMap[shortURL] = req.OriginalURL
+	urlStorage.AddURL(shortURL, req.OriginalURL)
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, URLMap); err != nil {
+	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}

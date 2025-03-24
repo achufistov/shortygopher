@@ -28,7 +28,7 @@ func initLogger() (*zap.Logger, error) {
 
 func main() {
 	var err error
-	cfg, err = config.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}
@@ -39,11 +39,17 @@ func main() {
 	}
 	defer logger.Sync()
 
-	URLMap, err = storage.LoadURLMappings(cfg.FileStorage)
+	urlStorage := storage.NewURLStorage()
+	urlMappings, err := storage.LoadURLMappings(cfg.FileStorage)
 	if err != nil {
 		log.Printf("Error loading URL mappings: %v", err)
-		URLMap = make(map[string]string) // Initialize an empty card if the download failed
+	} else {
+		for shortURL, originalURL := range urlMappings {
+			urlStorage.AddURL(shortURL, originalURL)
+		}
 	}
+
+	handlers.InitURLStorage(urlStorage)
 
 	r := chi.NewRouter()
 

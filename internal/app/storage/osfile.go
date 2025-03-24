@@ -13,29 +13,28 @@ type URLMapping struct {
 	OriginalURL string `json:"original_url"`
 }
 
-// LoadURLMappings loads URLs from a file
 func LoadURLMappings(filePath string) (map[string]string, error) {
 	urlMap := make(map[string]string)
 
-	// Checking if the file exists
+	// Проверяем, существует ли файл
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		// If the file does not exist, we return an empty card
+		// Если файл не существует, возвращаем пустую мапу
 		return urlMap, nil
 	}
 
-	// Reading the entire file
+	// Читаем весь файл
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decoding an array of JSON objects
+	// Декодируем массив JSON объектов
 	var mappings []URLMapping
 	if err := json.Unmarshal(data, &mappings); err != nil {
 		return nil, err
 	}
 
-	// Filling out the card
+	// Заполняем мапу
 	for _, mapping := range mappings {
 		urlMap[mapping.ShortURL] = mapping.OriginalURL
 	}
@@ -43,7 +42,7 @@ func LoadURLMappings(filePath string) (map[string]string, error) {
 	return urlMap, nil
 }
 
-// SaveURLMappings saves URLs to a file
+// SaveURLMappings сохраняет URL из URLStorage в файл
 func SaveURLMappings(filePath string, urlMap map[string]string) error {
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -68,7 +67,7 @@ func SaveURLMappings(filePath string, urlMap map[string]string) error {
 	return nil
 }
 
-// generateUUID generates a unique UUID
+// generateUUID генерирует уникальный UUID
 func generateUUID() string {
 	return uuid.New().String()
 }
