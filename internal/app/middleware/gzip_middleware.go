@@ -59,10 +59,24 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Content-Encoding", "gzip")
 			w.Header().Set("Vary", "Accept-Encoding")
 
-			gzipWriter := gzip.NewWriter(w)
-			defer gzipWriter.Close()
+			// Create a buffer to hold the compressed data
+			var buf bytes.Buffer
+			gzipWriter := gzip.NewWriter(&buf)
 
-			next.ServeHTTP(&GzipResponseWriter{ResponseWriter: w, Writer: gzipWriter}, r)
+			// Wrap the original ResponseWriter with our GzipResponseWriter
+			gzipResponseWriter := &GzipResponseWriter{ResponseWriter: w, Writer: gzipWriter}
+
+			// Serve the request with the gzip writer
+			next.ServeHTTP(gzipResponseWriter, r)
+
+			// Close the gzip writer to flush any remaining data
+			gzipWriter.Close()
+
+			// Set the correct Content-Length header
+			w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+
+			// Write the compressed data to the original ResponseWriter
+			w.Write(buf.Bytes())
 			return
 		}
 
