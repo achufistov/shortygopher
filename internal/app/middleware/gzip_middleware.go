@@ -13,7 +13,6 @@ type gzipResponseWriter struct {
 }
 
 func (w *gzipResponseWriter) WriteHeader(statusCode int) {
-	// Проверяем Content-Type перед записью заголовков
 	contentType := w.Header().Get("Content-Type")
 	if w.shouldGzip && shouldCompress(contentType) {
 		w.Header().Set("Content-Encoding", "gzip")
@@ -67,10 +66,12 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			r.Body = gzReader
 		}
 
-		// Проверка поддержки клиентом gzip
+		if r.Header.Get("Content-Type") == "application/x-gzip" {
+			r.Header.Set("Content-Type", "text/plain")
+		}
+
 		acceptsGzip := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 
-		// Создаем обертку ответа
 		gzw := &gzipResponseWriter{
 			ResponseWriter: w,
 			shouldGzip:     acceptsGzip,
