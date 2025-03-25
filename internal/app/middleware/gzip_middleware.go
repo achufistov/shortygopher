@@ -1,85 +1,82 @@
 package middleware
 
 import (
-	"bytes"
 	"compress/gzip"
-	"io"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
-// GzipResponseWriter оборачивает http.ResponseWriter для сжатия ответа
-type GzipResponseWriter struct {
+type gzipResponseWriter struct {
 	http.ResponseWriter
-	Writer *gzip.Writer
+	gzWriter   *gzip.Writer
+	shouldGzip bool
 }
 
-func (w *GzipResponseWriter) WriteHeader(statusCode int) {
+func (w *gzipResponseWriter) WriteHeader(statusCode int) {
+	// Проверяем Content-Type перед записью заголовков
+	contentType := w.Header().Get("Content-Type")
+	if w.shouldGzip && shouldCompress(contentType) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.gzWriter = gzip.NewWriter(w.ResponseWriter)
+	}
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func (w *GzipResponseWriter) Write(b []byte) (int, error) {
-	if w.Writer != nil {
-		return w.Writer.Write(b)
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	if w.gzWriter != nil {
+		return w.gzWriter.Write(b)
 	}
-	// If Writer is nil, just write to the ResponseWriter directly
 	return w.ResponseWriter.Write(b)
+}
+
+func (w *gzipResponseWriter) Close() {
+	if w.gzWriter != nil {
+		w.gzWriter.Close()
+	}
+}
+
+func shouldCompress(contentType string) bool {
+	compressibleTypes := []string{
+		"text/plain",
+		"text/html",
+		"application/json",
+		"application/javascript",
+		"text/css",
+		"application/xml",
+	}
+
+	for _, t := range compressibleTypes {
+		if strings.HasPrefix(contentType, t) {
+			return true
+		}
+	}
+	return false
 }
 
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Handle incoming gzip-encoded requests
-		if r.Header.Get("Content-Encoding") == "gzip" {
-			reader, err := gzip.NewReader(r.Body)
+		// Обработка входящего gzip
+		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+			gzReader, err := gzip.NewReader(r.Body)
 			if err != nil {
-				http.Error(w, "Failed to create gzip reader", http.StatusBadRequest)
+				http.Error(w, "Invalid gzip body", http.StatusBadRequest)
 				return
 			}
-			defer reader.Close()
-
-			body, err := io.ReadAll(reader)
-			if err != nil {
-				http.Error(w, "Failed to read gzip body", http.StatusBadRequest)
-				return
-			}
-
-			// Replace the request body with the decompressed data
-			r.Body = io.NopCloser(bytes.NewBuffer(body))
-			r.Header.Set("Content-Length", strconv.Itoa(len(body)))
-
-			// If the Content-Type is application/x-gzip, assume the body is plain text
-			if r.Header.Get("Content-Type") == "application/x-gzip" {
-				r.Header.Set("Content-Type", "text/plain")
-			}
+			defer gzReader.Close()
+			r.Body = gzReader
 		}
 
-		// Handle outgoing gzip-encoded responses
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			w.Header().Set("Content-Encoding", "gzip")
-			w.Header().Set("Vary", "Accept-Encoding")
+		// Проверка поддержки клиентом gzip
+		acceptsGzip := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 
-			// Create a buffer to hold the compressed data
-			var buf bytes.Buffer
-			gzipWriter := gzip.NewWriter(&buf)
-
-			// Wrap the original ResponseWriter with our GzipResponseWriter
-			gzipResponseWriter := &GzipResponseWriter{ResponseWriter: w, Writer: gzipWriter}
-
-			// Serve the request with the gzip writer
-			next.ServeHTTP(gzipResponseWriter, r)
-
-			// Close the gzip writer to flush any remaining data
-			gzipWriter.Close()
-
-			// Set the correct Content-Length header
-			w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-
-			// Write the compressed data to the original ResponseWriter
-			w.Write(buf.Bytes())
-			return
+		// Создаем обертку ответа
+		gzw := &gzipResponseWriter{
+			ResponseWriter: w,
+			shouldGzip:     acceptsGzip,
 		}
+		defer gzw.Close()
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(gzw, r)
 	})
 }
