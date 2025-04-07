@@ -42,9 +42,6 @@ func LoadConfig() (*Config, error) {
 	if fileStorage == "" {
 		fileStorage = *fileStoragePath
 	}
-	if databaseDSN == "" {
-		databaseDSN = *databaseDSNFlag
-	}
 
 	if address == "" || baseURL == "" || fileStorage == "" {
 		return nil, fmt.Errorf("address, base URL, file storage path must be provided")
