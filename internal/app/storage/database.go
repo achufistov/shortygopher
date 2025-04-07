@@ -70,6 +70,9 @@ func (s *DBStorage) GetAllURLs() map[string]string {
 		}
 		urlMap[shortURL] = originalURL
 	}
+	if err := rows.Err(); err != nil {
+		fmt.Printf("Failed to iterate over rows: %v\n", err)
+	}
 	return urlMap
 }
 
