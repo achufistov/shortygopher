@@ -1,3 +1,4 @@
+// config.go
 package config
 
 import (
@@ -10,6 +11,7 @@ var (
 	addressFlag     = flag.String("a", "localhost:8080", "HTTP server address")
 	baseURLFlag     = flag.String("b", "http://localhost:8080", "Base URL for shortened links")
 	fileStoragePath = flag.String("f", "urls.json", "File for storing urls")
+	databaseDSNFlag = flag.String("d", "", "Database connection string")
 	flagsDefined    = false
 )
 
@@ -17,21 +19,20 @@ type Config struct {
 	Address     string
 	BaseURL     string
 	FileStorage string
+	DatabaseDSN string
 }
 
 func LoadConfig() (*Config, error) {
-	// Check if flags have already been defined
 	if !flagsDefined {
 		flag.Parse()
 		flagsDefined = true
 	}
 
-	// Check the environment variables first
 	address := os.Getenv("SERVER_ADDRESS")
 	baseURL := os.Getenv("BASE_URL")
 	fileStorage := os.Getenv("FILE_STORAGE_PATH")
+	databaseDSN := os.Getenv("DATABASE_DSN")
 
-	// If the environment variables are not set, use the flags
 	if address == "" {
 		address = *addressFlag
 	}
@@ -41,15 +42,18 @@ func LoadConfig() (*Config, error) {
 	if fileStorage == "" {
 		fileStorage = *fileStoragePath
 	}
+	if databaseDSN == "" {
+		databaseDSN = *databaseDSNFlag
+	}
 
-	// Check that the address and base URL are set
-	if address == "" || baseURL == "" || fileStorage == "" {
-		return nil, fmt.Errorf("address, base URL, and file storage path must be provided")
+	if address == "" || baseURL == "" || fileStorage == "" || databaseDSN == "" {
+		return nil, fmt.Errorf("address, base URL, file storage path, and database DSN must be provided")
 	}
 
 	return &Config{
 		Address:     address,
 		BaseURL:     baseURL,
 		FileStorage: fileStorage,
+		DatabaseDSN: databaseDSN,
 	}, nil
 }

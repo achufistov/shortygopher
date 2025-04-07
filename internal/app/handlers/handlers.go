@@ -129,6 +129,20 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 }
 
+func HandlePing(dbStorage *storage.DBStorage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Invalid request method", http.StatusBadRequest)
+			return
+		}
+		if err := dbStorage.Ping(); err != nil {
+			http.Error(w, "Failed to ping database", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func generateShortURL() string {
 	b := make([]byte, 6)
 	_, err := rand.Read(b)

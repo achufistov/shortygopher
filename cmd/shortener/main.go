@@ -39,6 +39,12 @@ func main() {
 	}
 	defer logger.Sync()
 
+	dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
+	if err != nil {
+		log.Fatalf("Error initializing database storage: %v", err)
+	}
+	defer dbStorage.Close()
+
 	urlStorage := storage.NewURLStorage()
 	urlMappings, err := storage.LoadURLMappings(cfg.FileStorage)
 	if err != nil {
@@ -65,6 +71,7 @@ func main() {
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)
 	})
+	r.Get("/ping", handlers.HandlePing(dbStorage))
 
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
