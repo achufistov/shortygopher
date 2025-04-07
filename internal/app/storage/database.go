@@ -19,6 +19,18 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %v", err)
 	}
+
+	createTableQuery := `
+    CREATE TABLE IF NOT EXISTS urls (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL,
+        short_url TEXT NOT NULL UNIQUE
+    );
+    `
+	if _, err = db.Exec(createTableQuery); err != nil {
+		return nil, err
+	}
+
 	return &DBStorage{db: db}, nil
 }
 
