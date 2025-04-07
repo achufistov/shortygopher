@@ -25,9 +25,9 @@ func initConfig() {
 func Test_handlePost(t *testing.T) {
 	initConfig()
 
-	// Инициализируем URLStorage
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	// Инициализируем хранилище (in-memory)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	tests := []struct {
 		name           string
@@ -85,13 +85,13 @@ func Test_handlePost(t *testing.T) {
 func Test_handleGet(t *testing.T) {
 	initConfig()
 
-	// Инициализируем URLStorage и добавляем тестовый URL
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	// Инициализируем хранилище (in-memory) и добавляем тестовый URL
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	shortURL := "abc123"
 	originalURL := "https://example.com"
-	urlStorage.AddURL(shortURL, originalURL)
+	storageInstance.AddURL(shortURL, originalURL)
 
 	tests := []struct {
 		name           string
@@ -146,8 +146,9 @@ func Test_handleGet(t *testing.T) {
 func Test_handleShortenPost(t *testing.T) {
 	initConfig()
 
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	// Инициализируем хранилище (in-memory)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	tests := []struct {
 		name           string

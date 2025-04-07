@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	urlStorage *storage.URLStorage
+	storageInstance storage.Storage
 )
 
 type ShortenRequest struct {
@@ -28,8 +28,8 @@ type ShortenResponse struct {
 	ShortURL string `json:"result"`
 }
 
-func InitURLStorage(storage *storage.URLStorage) {
-	urlStorage = storage
+func InitStorage(storage storage.Storage) {
+	storageInstance = storage
 }
 
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -40,14 +40,12 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 
 	var originalURL string
 
-	// Check for valid Content-Type
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "application/json") && !strings.Contains(contentType, "text/plain") {
 		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
 
-	// Handle JSON requests
 	if strings.Contains(contentType, "application/json") {
 		var req ShortenRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -56,7 +54,6 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		}
 		originalURL = req.OriginalURL
 	} else {
-		// Handle plain text requests
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -65,11 +62,10 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		originalURL = string(body)
 	}
 
-	// Generate a short URL and store it
 	shortURL := generateShortURL()
-	urlStorage.AddURL(shortURL, originalURL)
+	storageInstance.AddURL(shortURL, originalURL)
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
@@ -86,7 +82,7 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	originalURL, exists := urlStorage.GetURL(id)
+	originalURL, exists := storageInstance.GetURL(id)
 
 	if !exists {
 		http.Error(w, "URL not found", http.StatusNotFound)
@@ -110,9 +106,9 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 
 	shortURL := generateShortURL()
-	urlStorage.AddURL(shortURL, req.OriginalURL)
+	storageInstance.AddURL(shortURL, req.OriginalURL)
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
@@ -129,14 +125,14 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func HandlePing(dbStorage *storage.DBStorage) http.HandlerFunc {
+func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Invalid request method", http.StatusBadRequest)
 			return
 		}
-		if err := dbStorage.Ping(); err != nil {
-			http.Error(w, "Failed to ping database", http.StatusInternalServerError)
+		if err := storageInstance.Ping(); err != nil {
+			http.Error(w, "Failed to ping storage", http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

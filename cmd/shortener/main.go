@@ -14,8 +14,7 @@ import (
 )
 
 var (
-	URLMap = make(map[string]string)
-	cfg    *config.Config
+	cfg *config.Config
 )
 
 func initLogger() (*zap.Logger, error) {
@@ -39,23 +38,29 @@ func main() {
 	}
 	defer logger.Sync()
 
-	dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
-	if err != nil {
-		log.Fatalf("Error initializing database storage: %v", err)
+	var storageInstance storage.Storage
+	if cfg.DatabaseDSN != "" {
+		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
+		if err != nil {
+			log.Fatalf("Error initializing database storage: %v", err)
+		}
+		defer dbStorage.Close()
+		storageInstance = dbStorage
+	} else {
+		log.Println("Database DSN is empty, using in-memory storage")
+		storageInstance = storage.NewURLStorage()
 	}
-	defer dbStorage.Close()
 
-	urlStorage := storage.NewURLStorage()
 	urlMappings, err := storage.LoadURLMappings(cfg.FileStorage)
 	if err != nil {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			urlStorage.AddURL(shortURL, originalURL)
+			storageInstance.AddURL(shortURL, originalURL)
 		}
 	}
 
-	handlers.InitURLStorage(urlStorage)
+	handlers.InitStorage(storageInstance)
 
 	r := chi.NewRouter()
 
@@ -71,7 +76,7 @@ func main() {
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)
 	})
-	r.Get("/ping", handlers.HandlePing(dbStorage))
+	r.Get("/ping", handlers.HandlePing(storageInstance))
 
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
