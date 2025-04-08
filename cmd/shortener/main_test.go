@@ -200,3 +200,114 @@ func Test_handleShortenPost(t *testing.T) {
 		})
 	}
 }
+
+func Test_handlePing(t *testing.T) {
+	initConfig()
+
+	// Инициализируем хранилище (in-memory)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
+
+	tests := []struct {
+		name           string
+		expectedStatus int
+	}{
+		{
+			name:           "Valid GET request",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Invalid request method",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req *http.Request
+			if tt.expectedStatus == http.StatusOK {
+				var err error
+				req, err = http.NewRequest("GET", "/ping", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				var err error
+				req, err = http.NewRequest("POST", "/ping", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandlePing(storageInstance)(w, r)
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+		})
+	}
+}
+
+func Test_handleBatchShortenPost(t *testing.T) {
+	initConfig()
+
+	// Инициализируем хранилище (in-memory)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		expectedStatus int
+		expectedJSON   string
+	}{
+		{
+			name:           "Invalid JSON",
+			requestBody:    `[{"correlation_id": "1", "original_url": "invalid-url"`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   "",
+		},
+		{
+			name:           "Empty batch",
+			requestBody:    `[]`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("POST", "/api/shorten/batch", bytes.NewBufferString(tt.requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandleBatchShortenPost(cfg, w, r)
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+
+			if tt.expectedStatus == http.StatusCreated {
+				if !strings.HasPrefix(rr.Body.String(), tt.expectedJSON) {
+					t.Errorf("handler returned unexpected body: got %v want %v",
+						rr.Body.String(), tt.expectedJSON)
+				}
+			}
+		})
+	}
+}
