@@ -28,6 +28,16 @@ type ShortenResponse struct {
 	ShortURL string `json:"result"`
 }
 
+type BatchRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
 func InitStorage(storage storage.Storage) {
 	storageInstance = storage
 }
@@ -136,6 +146,42 @@ func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+		return
+	}
+	var batchRequests []BatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&batchRequests); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if len(batchRequests) == 0 {
+		http.Error(w, "Empty batch", http.StatusBadRequest)
+		return
+	}
+	var batchResponses []BatchResponse
+	for _, req := range batchRequests {
+		shortURL := generateShortURL()
+		storageInstance.AddURL(shortURL, req.OriginalURL)
+
+		batchResponses = append(batchResponses, BatchResponse{
+			CorrelationID: req.CorrelationID,
+			ShortURL:      fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+		})
+	}
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
+		http.Error(w, "Failed to save URL mappings", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(batchResponses); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
 	}
 }
 

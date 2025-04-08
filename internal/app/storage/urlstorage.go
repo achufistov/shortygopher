@@ -21,6 +21,15 @@ func (s *URLStorage) AddURL(shortURL, originalURL string) {
 	s.URLs[shortURL] = originalURL
 }
 
+func (s *URLStorage) AddURLs(urls map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for shortURL, originalURL := range urls {
+		s.URLs[shortURL] = originalURL
+	}
+	return nil
+}
+
 func (s *URLStorage) GetURL(shortURL string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

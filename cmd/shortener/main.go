@@ -76,6 +76,9 @@ func main() {
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)
 	})
+	r.Post("/api/shorten/batch", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleBatchShortenPost(cfg, w, r)
+	})
 	r.Get("/ping", handlers.HandlePing(storageInstance))
 
 	log.Printf("Server is running on %s", cfg.Address)

@@ -42,6 +42,28 @@ func (s *DBStorage) AddURL(shortURL, originalURL string) {
 	}
 }
 
+func (s *DBStorage) AddURLs(urls map[string]string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+
+	query := `INSERT INTO urls (url, short_url) VALUES ($1, $2)`
+	for shortURL, originalURL := range urls {
+		_, err := tx.Exec(query, originalURL, shortURL)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to add URL to database: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return nil
+}
+
 func (s *DBStorage) GetURL(shortURL string) (string, bool) {
 	var originalURL string
 	query := `SELECT url FROM urls WHERE short_url = $1`
