@@ -73,7 +73,23 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	}
 
 	shortURL := generateShortURL()
-	storageInstance.AddURL(shortURL, originalURL)
+	err := storageInstance.AddURL(shortURL, originalURL)
+	if err != nil {
+		if err.Error() == "URL already exists" {
+
+			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(originalURL)
+			if !exists {
+				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, "%s/%s", cfg.BaseURL, existingShortURL)
+			return
+		}
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
 
 	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
@@ -83,6 +99,58 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", cfg.BaseURL, shortURL)
+}
+
+func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+		return
+	}
+
+	var req ShortenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	shortURL := generateShortURL()
+	err := storageInstance.AddURL(shortURL, req.OriginalURL)
+	if err != nil {
+		if err.Error() == "URL already exists" {
+			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(req.OriginalURL)
+			if !exists {
+				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
+				return
+			}
+			resp := ShortenResponse{
+				ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, existingShortURL),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			}
+			return
+		}
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
+
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
+
+	resp := ShortenResponse{
+		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -101,38 +169,6 @@ func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
-}
-
-func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusBadRequest)
-		return
-	}
-
-	var req ShortenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	shortURL := generateShortURL()
-	storageInstance.AddURL(shortURL, req.OriginalURL)
-
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-		return
-	}
-
-	resp := ShortenResponse{
-		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
 }
 
 func HandlePing(storageInstance storage.Storage) http.HandlerFunc {

@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -21,12 +22,12 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	}
 
 	createTableQuery := `
-    CREATE TABLE IF NOT EXISTS urls (
-        id SERIAL PRIMARY KEY,
-        url TEXT NOT NULL,
-        short_url TEXT NOT NULL UNIQUE
-    );
-    `
+	CREATE TABLE IF NOT EXISTS urls (
+		id SERIAL PRIMARY KEY,
+		url TEXT NOT NULL UNIQUE,
+		short_url TEXT NOT NULL UNIQUE
+	);
+	`
 	if _, err = db.Exec(createTableQuery); err != nil {
 		return nil, fmt.Errorf("unable to create database: %v", err)
 	}
@@ -34,12 +35,23 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	return &DBStorage{db: db}, nil
 }
 
-func (s *DBStorage) AddURL(shortURL, originalURL string) {
-	query := `INSERT INTO urls (url, short_url) VALUES ($1, $2)`
-	_, err := s.db.Exec(query, originalURL, shortURL)
+func (s *DBStorage) AddURL(shortURL, originalURL string) error {
+	query := `
+    INSERT INTO urls (url, short_url)
+    VALUES ($1, $2)
+    ON CONFLICT (url) DO NOTHING
+    RETURNING short_url;
+    `
+	var existingShortURL string
+	err := s.db.QueryRow(query, originalURL, shortURL).Scan(&existingShortURL)
 	if err != nil {
-		fmt.Printf("Failed to add URL to database: %v\n", err)
+		if err == sql.ErrNoRows {
+			// URL уже существует, возвращаем ошибку
+			return fmt.Errorf("URL already exists")
+		}
+		return fmt.Errorf("failed to add URL to database: %v", err)
 	}
+	return nil
 }
 
 func (s *DBStorage) AddURLs(urls map[string]string) error {
@@ -96,6 +108,20 @@ func (s *DBStorage) GetAllURLs() map[string]string {
 		fmt.Printf("Failed to iterate over rows: %v\n", err)
 	}
 	return urlMap
+}
+
+func (s *DBStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
+	var shortURL string
+	query := `SELECT short_url FROM urls WHERE url = $1`
+	err := s.db.QueryRow(query, originalURL).Scan(&shortURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", false
+		}
+		log.Printf("Failed to get short URL by original URL: %v", err) // ubrat' log lib
+		return "", false
+	}
+	return shortURL, true
 }
 
 func (s *DBStorage) Ping() error {

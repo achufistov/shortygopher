@@ -15,10 +15,11 @@ func NewURLStorage() *URLStorage {
 	}
 }
 
-func (s *URLStorage) AddURL(shortURL, originalURL string) {
+func (s *URLStorage) AddURL(shortURL, originalURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.URLs[shortURL] = originalURL
+	return nil
 }
 
 func (s *URLStorage) AddURLs(urls map[string]string) error {
@@ -45,6 +46,17 @@ func (s *URLStorage) GetAllURLs() map[string]string {
 		copyMap[k] = v
 	}
 	return copyMap
+}
+
+func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for shortURL, url := range s.URLs {
+		if url == originalURL {
+			return shortURL, true
+		}
+	}
+	return "", false
 }
 
 func (s *URLStorage) Ping() error {
