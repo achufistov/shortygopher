@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
@@ -42,7 +43,12 @@ func main() {
 	if cfg.DatabaseDSN != "" {
 		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
 		if err != nil {
-			log.Fatalf("Error initializing database storage: %v", err)
+			log.Printf("Error initializing database storage: %v", err)
+			// сlosing resources if they have been opened before os.Exit(1)
+			if dbStorage != nil {
+				dbStorage.Close()
+			}
+			os.Exit(1)
 		}
 		defer dbStorage.Close()
 		storageInstance = dbStorage
