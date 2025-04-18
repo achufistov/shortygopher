@@ -3,7 +3,6 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -46,7 +45,7 @@ func (s *DBStorage) AddURL(shortURL, originalURL string) error {
 	err := s.db.QueryRow(query, originalURL, shortURL).Scan(&existingShortURL)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// URL уже существует, возвращаем ошибку
+
 			return fmt.Errorf("URL already exists")
 		}
 		return fmt.Errorf("failed to add URL to database: %v", err)
@@ -118,7 +117,7 @@ func (s *DBStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) 
 		if err == sql.ErrNoRows {
 			return "", false
 		}
-		log.Printf("Failed to get short URL by original URL: %v", err) // ubrat' log lib
+		fmt.Printf("Failed to get short URL by original URL: %v", err)
 		return "", false
 	}
 	return shortURL, true

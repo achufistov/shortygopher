@@ -25,7 +25,7 @@ func initConfig() {
 func Test_handlePost(t *testing.T) {
 	initConfig()
 
-	// Инициализируем хранилище (in-memory)
+	// init in-memory storage
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
 
@@ -85,7 +85,6 @@ func Test_handlePost(t *testing.T) {
 func Test_handleGet(t *testing.T) {
 	initConfig()
 
-	// Инициализируем хранилище (in-memory) и добавляем тестовый URL
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
 
@@ -146,7 +145,6 @@ func Test_handleGet(t *testing.T) {
 func Test_handleShortenPost(t *testing.T) {
 	initConfig()
 
-	// Инициализируем хранилище (in-memory)
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
 
@@ -204,7 +202,6 @@ func Test_handleShortenPost(t *testing.T) {
 func Test_handlePing(t *testing.T) {
 	initConfig()
 
-	// Инициализируем хранилище (in-memory)
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
 
@@ -257,7 +254,6 @@ func Test_handlePing(t *testing.T) {
 func Test_handleBatchShortenPost(t *testing.T) {
 	initConfig()
 
-	// Инициализируем хранилище (in-memory)
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
 

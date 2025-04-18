@@ -7,23 +7,19 @@ import (
 	"go.uber.org/zap"
 )
 
-// Middleware для логирования
 func LoggingMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			// Логируем информацию о запросе
 			logger.Info("Request",
 				zap.String("method", r.Method),
 				zap.String("uri", r.RequestURI),
 			)
 
-			// Перехватываем ответ
 			rw := &responseWriter{ResponseWriter: w}
 			next.ServeHTTP(rw, r)
 
-			// Логируем информацию о ответе
 			logger.Info("Response",
 				zap.Int("status", rw.status),
 				zap.Int("size", rw.size),
@@ -33,7 +29,6 @@ func LoggingMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// responseWriter используется для перехвата статуса и размера ответа
 type responseWriter struct {
 	http.ResponseWriter
 	status int
