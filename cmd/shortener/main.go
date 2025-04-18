@@ -56,7 +56,10 @@ func main() {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			storageInstance.AddURL(shortURL, originalURL)
+			err := storageInstance.AddURL(shortURL, originalURL)
+			if err != nil {
+				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
+			}
 		}
 	}
 
