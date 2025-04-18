@@ -199,7 +199,7 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 		http.Error(w, "Empty batch", http.StatusBadRequest)
 		return
 	}
-	var batchResponses []BatchResponse
+	batchResponses := make([]BatchResponse, 0, len(batchRequests))
 	for _, req := range batchRequests {
 		shortURL := generateShortURL()
 		storageInstance.AddURL(shortURL, req.OriginalURL)
