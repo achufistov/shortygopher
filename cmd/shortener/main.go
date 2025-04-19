@@ -80,7 +80,7 @@ func main() {
 		handlers.HandlePost(cfg, w, r)
 	})
 	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandleGet(cfg, w, r)
+		handlers.HandleGet(w, r)
 	})
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)

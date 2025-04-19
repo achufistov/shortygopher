@@ -122,7 +122,7 @@ func Test_handleGet(t *testing.T) {
 			rr := httptest.NewRecorder()
 			r := chi.NewRouter()
 			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				handlers.HandleGet(cfg, w, r)
+				handlers.HandleGet(w, r)
 			})
 
 			r.ServeHTTP(rr, req)
