@@ -55,7 +55,7 @@ func shouldCompress(contentType string) bool {
 
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Обработка входящего gzip
+		// process incoming gzip
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
 			gzReader, err := gzip.NewReader(r.Body)
 			if err != nil {

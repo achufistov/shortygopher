@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	urlStorage *storage.URLStorage
+	storageInstance storage.Storage
 )
 
 type ShortenRequest struct {
@@ -28,8 +28,18 @@ type ShortenResponse struct {
 	ShortURL string `json:"result"`
 }
 
-func InitURLStorage(storage *storage.URLStorage) {
-	urlStorage = storage
+type BatchRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
+func InitStorage(storage storage.Storage) {
+	storageInstance = storage
 }
 
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -40,14 +50,12 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 
 	var originalURL string
 
-	// Check for valid Content-Type
 	contentType := r.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "application/json") && !strings.Contains(contentType, "text/plain") {
 		http.Error(w, "Invalid content type", http.StatusBadRequest)
 		return
 	}
 
-	// Handle JSON requests
 	if strings.Contains(contentType, "application/json") {
 		var req ShortenRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -56,7 +64,6 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		}
 		originalURL = req.OriginalURL
 	} else {
-		// Handle plain text requests
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -65,11 +72,26 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		originalURL = string(body)
 	}
 
-	// Generate a short URL and store it
 	shortURL := generateShortURL()
-	urlStorage.AddURL(shortURL, originalURL)
+	err := storageInstance.AddURL(shortURL, originalURL)
+	if err != nil {
+		if err.Error() == "URL already exists" {
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
+			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(originalURL)
+			if !exists {
+				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprintf(w, "%s/%s", cfg.BaseURL, existingShortURL)
+			return
+		}
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
+
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
@@ -77,24 +99,6 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", cfg.BaseURL, shortURL)
-}
-
-func HandleGet(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Invalid request method", http.StatusBadRequest)
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-	originalURL, exists := urlStorage.GetURL(id)
-
-	if !exists {
-		http.Error(w, "URL not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Location", originalURL)
-	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
 func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
@@ -110,9 +114,29 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 
 	shortURL := generateShortURL()
-	urlStorage.AddURL(shortURL, req.OriginalURL)
+	err := storageInstance.AddURL(shortURL, req.OriginalURL)
+	if err != nil {
+		if err.Error() == "URL already exists" {
+			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(req.OriginalURL)
+			if !exists {
+				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
+				return
+			}
+			resp := ShortenResponse{
+				ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, existingShortURL),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			}
+			return
+		}
+		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		return
+	}
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, urlStorage.GetAllURLs()); err != nil {
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
@@ -124,6 +148,74 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	originalURL, exists := storageInstance.GetURL(id)
+
+	if !exists {
+		http.Error(w, "URL not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Location", originalURL)
+	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Invalid request method", http.StatusBadRequest)
+			return
+		}
+		if err := storageInstance.Ping(); err != nil {
+			http.Error(w, "Failed to ping storage", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+		return
+	}
+	var batchRequests []BatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&batchRequests); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if len(batchRequests) == 0 {
+		http.Error(w, "Empty batch", http.StatusBadRequest)
+		return
+	}
+	batchResponses := make([]BatchResponse, 0, len(batchRequests))
+	for _, req := range batchRequests {
+		shortURL := generateShortURL()
+		storageInstance.AddURL(shortURL, req.OriginalURL)
+
+		batchResponses = append(batchResponses, BatchResponse{
+			CorrelationID: req.CorrelationID,
+			ShortURL:      fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+		})
+	}
+	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
+		http.Error(w, "Failed to save URL mappings", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(batchResponses); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

@@ -15,14 +15,22 @@ func NewURLStorage() *URLStorage {
 	}
 }
 
-// AddURL добавляет URL в хранилище
-func (s *URLStorage) AddURL(shortURL, originalURL string) {
+func (s *URLStorage) AddURL(shortURL, originalURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.URLs[shortURL] = originalURL
+	return nil
 }
 
-// GetURL возвращает оригинальный URL по короткому
+func (s *URLStorage) AddURLs(urls map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for shortURL, originalURL := range urls {
+		s.URLs[shortURL] = originalURL
+	}
+	return nil
+}
+
 func (s *URLStorage) GetURL(shortURL string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -30,7 +38,6 @@ func (s *URLStorage) GetURL(shortURL string) (string, bool) {
 	return originalURL, exists
 }
 
-// GetAllURLs возвращает копию всех URL
 func (s *URLStorage) GetAllURLs() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -39,4 +46,23 @@ func (s *URLStorage) GetAllURLs() map[string]string {
 		copyMap[k] = v
 	}
 	return copyMap
+}
+
+func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for shortURL, url := range s.URLs {
+		if url == originalURL {
+			return shortURL, true
+		}
+	}
+	return "", false
+}
+
+func (s *URLStorage) Ping() error {
+	return nil // In-memory storage doesn't need to ping anything
+}
+
+func (s *URLStorage) Close() error {
+	return nil // In-memory storage doesn't need to close anything
 }

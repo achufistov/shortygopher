@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
@@ -14,8 +15,7 @@ import (
 )
 
 var (
-	URLMap = make(map[string]string)
-	cfg    *config.Config
+	cfg *config.Config
 )
 
 func initLogger() (*zap.Logger, error) {
@@ -39,17 +39,37 @@ func main() {
 	}
 	defer logger.Sync()
 
-	urlStorage := storage.NewURLStorage()
+	var storageInstance storage.Storage
+	if cfg.DatabaseDSN != "" {
+		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
+		if err != nil {
+			log.Printf("Error initializing database storage: %v", err)
+			// сlosing resources if they have been opened before os.Exit(1)
+			if dbStorage != nil {
+				dbStorage.Close()
+			}
+			os.Exit(1)
+		}
+		defer dbStorage.Close()
+		storageInstance = dbStorage
+	} else {
+		log.Println("Database DSN is empty, using in-memory storage")
+		storageInstance = storage.NewURLStorage()
+	}
+
 	urlMappings, err := storage.LoadURLMappings(cfg.FileStorage)
 	if err != nil {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			urlStorage.AddURL(shortURL, originalURL)
+			err := storageInstance.AddURL(shortURL, originalURL)
+			if err != nil {
+				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
+			}
 		}
 	}
 
-	handlers.InitURLStorage(urlStorage)
+	handlers.InitStorage(storageInstance)
 
 	r := chi.NewRouter()
 
@@ -60,11 +80,15 @@ func main() {
 		handlers.HandlePost(cfg, w, r)
 	})
 	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandleGet(cfg, w, r)
+		handlers.HandleGet(w, r)
 	})
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)
 	})
+	r.Post("/api/shorten/batch", func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleBatchShortenPost(cfg, w, r)
+	})
+	r.Get("/ping", handlers.HandlePing(storageInstance))
 
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))

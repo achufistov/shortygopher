@@ -25,9 +25,9 @@ func initConfig() {
 func Test_handlePost(t *testing.T) {
 	initConfig()
 
-	// Инициализируем URLStorage
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	// init in-memory storage
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	tests := []struct {
 		name           string
@@ -85,13 +85,12 @@ func Test_handlePost(t *testing.T) {
 func Test_handleGet(t *testing.T) {
 	initConfig()
 
-	// Инициализируем URLStorage и добавляем тестовый URL
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	shortURL := "abc123"
 	originalURL := "https://example.com"
-	urlStorage.AddURL(shortURL, originalURL)
+	storageInstance.AddURL(shortURL, originalURL)
 
 	tests := []struct {
 		name           string
@@ -123,7 +122,7 @@ func Test_handleGet(t *testing.T) {
 			rr := httptest.NewRecorder()
 			r := chi.NewRouter()
 			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				handlers.HandleGet(cfg, w, r)
+				handlers.HandleGet(w, r)
 			})
 
 			r.ServeHTTP(rr, req)
@@ -146,8 +145,8 @@ func Test_handleGet(t *testing.T) {
 func Test_handleShortenPost(t *testing.T) {
 	initConfig()
 
-	urlStorage := storage.NewURLStorage()
-	handlers.InitURLStorage(urlStorage)
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
 
 	tests := []struct {
 		name           string
@@ -181,6 +180,115 @@ func Test_handleShortenPost(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				handlers.HandleShortenPost(cfg, w, r)
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+
+			if tt.expectedStatus == http.StatusCreated {
+				if !strings.HasPrefix(rr.Body.String(), tt.expectedJSON) {
+					t.Errorf("handler returned unexpected body: got %v want %v",
+						rr.Body.String(), tt.expectedJSON)
+				}
+			}
+		})
+	}
+}
+
+func Test_handlePing(t *testing.T) {
+	initConfig()
+
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
+
+	tests := []struct {
+		name           string
+		expectedStatus int
+	}{
+		{
+			name:           "Valid GET request",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Invalid request method",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req *http.Request
+			if tt.expectedStatus == http.StatusOK {
+				var err error
+				req, err = http.NewRequest("GET", "/ping", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				var err error
+				req, err = http.NewRequest("POST", "/ping", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandlePing(storageInstance)(w, r)
+			})
+
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+		})
+	}
+}
+
+func Test_handleBatchShortenPost(t *testing.T) {
+	initConfig()
+
+	storageInstance := storage.NewURLStorage()
+	handlers.InitStorage(storageInstance)
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		expectedStatus int
+		expectedJSON   string
+	}{
+		{
+			name:           "Invalid JSON",
+			requestBody:    `[{"correlation_id": "1", "original_url": "invalid-url"`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   "",
+		},
+		{
+			name:           "Empty batch",
+			requestBody:    `[]`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("POST", "/api/shorten/batch", bytes.NewBufferString(tt.requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlers.HandleBatchShortenPost(cfg, w, r)
 			})
 
 			handler.ServeHTTP(rr, req)
