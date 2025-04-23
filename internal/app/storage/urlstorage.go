@@ -15,7 +15,7 @@ func NewURLStorage() *URLStorage {
 	}
 }
 
-func (s *URLStorage) AddURL(shortURL, originalURL string) error {
+func (s *URLStorage) AddURL(shortURL, originalURL, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.URLs[shortURL] = originalURL
@@ -57,6 +57,12 @@ func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool)
 		}
 	}
 	return "", false
+}
+
+func (s *URLStorage) GetUserURLs(userID string) (map[string]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.GetAllURLs(), nil
 }
 
 func (s *URLStorage) Ping() error {

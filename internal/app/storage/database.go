@@ -34,18 +34,17 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	return &DBStorage{db: db}, nil
 }
 
-func (s *DBStorage) AddURL(shortURL, originalURL string) error {
+func (s *DBStorage) AddURL(shortURL, originalURL, userID string) error {
 	query := `
-    INSERT INTO urls (url, short_url)
-    VALUES ($1, $2)
+    INSERT INTO urls (url, short_url, user_id)
+    VALUES ($1, $2, $3)
     ON CONFLICT (url) DO NOTHING
     RETURNING short_url;
     `
 	var existingShortURL string
-	err := s.db.QueryRow(query, originalURL, shortURL).Scan(&existingShortURL)
+	err := s.db.QueryRow(query, originalURL, shortURL, userID).Scan(&existingShortURL)
 	if err != nil {
 		if err == sql.ErrNoRows {
-
 			return fmt.Errorf("URL already exists")
 		}
 		return fmt.Errorf("failed to add URL to database: %v", err)
@@ -121,6 +120,28 @@ func (s *DBStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) 
 		return "", false
 	}
 	return shortURL, true
+}
+
+func (s *DBStorage) GetUserURLs(userID string) (map[string]string, error) {
+	urlMap := make(map[string]string)
+	query := `SELECT short_url, url FROM urls WHERE user_id = $1`
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user URLs from database: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var shortURL, originalURL string
+		if err := rows.Scan(&shortURL, &originalURL); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		urlMap[shortURL] = originalURL
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate over rows: %v", err)
+	}
+	return urlMap, nil
 }
 
 func (s *DBStorage) Ping() error {

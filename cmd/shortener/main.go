@@ -44,7 +44,6 @@ func main() {
 		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
 		if err != nil {
 			log.Printf("Error initializing database storage: %v", err)
-			// сlosing resources if they have been opened before os.Exit(1)
 			if dbStorage != nil {
 				dbStorage.Close()
 			}
@@ -62,7 +61,8 @@ func main() {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			err := storageInstance.AddURL(shortURL, originalURL)
+			userID := "system"
+			err := storageInstance.AddURL(shortURL, originalURL, userID)
 			if err != nil {
 				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
 			}
@@ -75,6 +75,7 @@ func main() {
 
 	r.Use(middleware.LoggingMiddleware(logger))
 	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.AuthMiddleware(cfg)) // Передаём cfg в AuthMiddleware
 
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandlePost(cfg, w, r)
@@ -89,6 +90,7 @@ func main() {
 		handlers.HandleBatchShortenPost(cfg, w, r)
 	})
 	r.Get("/ping", handlers.HandlePing(storageInstance))
+	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
 
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))

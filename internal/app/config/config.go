@@ -1,7 +1,7 @@
-// config.go
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -16,10 +16,11 @@ var (
 )
 
 type Config struct {
-	Address     string
-	BaseURL     string
-	FileStorage string
-	DatabaseDSN string
+	Address     string `json:"address"`
+	BaseURL     string `json:"base_url"`
+	FileStorage string `json:"file_storage"`
+	DatabaseDSN string `json:"database_dsn"`
+	SecretKey   string `json:"secret_key"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -50,10 +51,21 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("address, base URL, file storage path must be provided")
 	}
 
-	return &Config{
-		Address:     address,
-		BaseURL:     baseURL,
-		FileStorage: fileStorage,
-		DatabaseDSN: databaseDSN,
-	}, nil
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open config.json: %v", err)
+	}
+	defer configFile.Close()
+
+	var config Config
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		return nil, fmt.Errorf("failed to decode config.json: %v", err)
+	}
+
+	config.Address = address
+	config.BaseURL = baseURL
+	config.FileStorage = fileStorage
+	config.DatabaseDSN = databaseDSN
+
+	return &config, nil
 }

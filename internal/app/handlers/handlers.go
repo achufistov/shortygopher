@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
+	"github.com/achufistov/shortygopher.git/internal/app/middleware"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 
 	"github.com/go-chi/chi/v5"
@@ -38,11 +39,18 @@ type BatchResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type UserURLResponse struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 func InitStorage(storage storage.Storage) {
 	storageInstance = storage
 }
 
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 		return
@@ -73,7 +81,7 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	}
 
 	shortURL := generateShortURL()
-	err := storageInstance.AddURL(shortURL, originalURL)
+	err := storageInstance.AddURL(shortURL, originalURL, userID)
 	if err != nil {
 		if err.Error() == "URL already exists" {
 
@@ -102,6 +110,7 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 		return
@@ -114,7 +123,7 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 
 	shortURL := generateShortURL()
-	err := storageInstance.AddURL(shortURL, req.OriginalURL)
+	err := storageInstance.AddURL(shortURL, req.OriginalURL, userID)
 	if err != nil {
 		if err.Error() == "URL already exists" {
 			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(req.OriginalURL)
@@ -186,6 +195,7 @@ func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 }
 
 func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 		return
@@ -202,7 +212,7 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 	batchResponses := make([]BatchResponse, 0, len(batchRequests))
 	for _, req := range batchRequests {
 		shortURL := generateShortURL()
-		storageInstance.AddURL(shortURL, req.OriginalURL)
+		storageInstance.AddURL(shortURL, req.OriginalURL, userID)
 
 		batchResponses = append(batchResponses, BatchResponse{
 			CorrelationID: req.CorrelationID,
@@ -218,6 +228,43 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 	if err := json.NewEncoder(w).Encode(batchResponses); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
+	}
+}
+
+func HandleGetUserURLs(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("user_id")
+		if err != nil || !middleware.ValidateCookie(cookie, cfg.SecretKey) { // Добавлен cfg.SecretKey
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		userID := strings.Split(cookie.Value, ".")[0]
+		urls, err := storageInstance.GetUserURLs(userID)
+		if err != nil {
+			http.Error(w, "Failed to get user URLs", http.StatusInternalServerError)
+			return
+		}
+
+		if len(urls) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		response := make([]UserURLResponse, 0, len(urls))
+		for shortURL, originalURL := range urls {
+			response = append(response, UserURLResponse{
+				ShortURL:    fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+				OriginalURL: originalURL,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 

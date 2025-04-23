@@ -90,7 +90,8 @@ func Test_handleGet(t *testing.T) {
 
 	shortURL := "abc123"
 	originalURL := "https://example.com"
-	storageInstance.AddURL(shortURL, originalURL)
+	userID := "test-user"
+	storageInstance.AddURL(shortURL, originalURL, userID) // Добавлен userID
 
 	tests := []struct {
 		name           string
