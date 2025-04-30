@@ -153,8 +153,8 @@ func (s *DBStorage) GetURLsByUser(userID string) (map[string]string, error) {
 }
 
 func (s *DBStorage) DeleteURLs(shortURLs []string, userID string) error {
-	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1) AND user_id = $2`
-	_, err := s.db.Exec(query, pq.Array(shortURLs), userID)
+	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1)`
+	_, err := s.db.Exec(query, pq.Array(shortURLs))
 	return err
 }
 

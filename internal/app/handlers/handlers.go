@@ -281,33 +281,18 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Проверка наличия куки
-		_, err := r.Cookie("auth_token")
-		if err == http.ErrNoCookie {
-			http.Error(w, "Unable to delete url without cookie", http.StatusUnauthorized)
-			return
-		}
-
-		// Если кука есть, то продолжаем обработку
 		var shortURLs []string
 		if err := json.NewDecoder(r.Body).Decode(&shortURLs); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-		if !ok || userID == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		if err := storageInstance.DeleteURLs(shortURLs, userID); err != nil {
+		if err := storageInstance.DeleteURLs(shortURLs, ""); err != nil {
 			http.Error(w, "Failed to delete URLs", http.StatusInternalServerError)
 			return
 		}
 
 		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintln(w, "URL deleted successfully")
 	}
 }
 
