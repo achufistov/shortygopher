@@ -79,6 +79,18 @@ func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool)
 	return "", false
 }
 
+func (s *URLStorage) DeleteURLs(shortURLs []string, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, shortURL := range shortURLs {
+		if info, exists := s.URLs[shortURL]; exists && info.UserID == userID {
+			info.UserID = ""
+			s.URLs[shortURL] = info
+		}
+	}
+	return nil
+}
+
 func (s *URLStorage) Ping() error {
 	return nil
 }

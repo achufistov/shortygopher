@@ -9,4 +9,5 @@ type Storage interface {
 	GetShortURLByOriginalURL(originalURL string) (string, bool)
 	Ping() error
 	Close() error
+	DeleteURLs(shortURLs []string, userID string) error // Добавлено
 }

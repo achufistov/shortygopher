@@ -83,7 +83,7 @@ func main() {
 	})
 	r.Get("/ping", handlers.HandlePing(storageInstance))
 	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
-
+	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
 }
