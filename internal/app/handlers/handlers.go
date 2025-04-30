@@ -288,7 +288,7 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Если кука есть, продолжаем обработку
+		// Если кука есть, то продолжаем обработку
 		var shortURLs []string
 		if err := json.NewDecoder(r.Body).Decode(&shortURLs); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
