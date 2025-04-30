@@ -4,29 +4,34 @@ import (
 	"sync"
 )
 
+type URLInfo struct {
+	OriginalURL string
+	UserID      string
+}
+
 type URLStorage struct {
 	mu   sync.RWMutex
-	URLs map[string]string
+	URLs map[string]URLInfo
 }
 
 func NewURLStorage() *URLStorage {
 	return &URLStorage{
-		URLs: make(map[string]string),
+		URLs: make(map[string]URLInfo),
 	}
 }
 
-func (s *URLStorage) AddURL(shortURL, originalURL string) error {
+func (s *URLStorage) AddURL(shortURL, originalURL, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.URLs[shortURL] = originalURL
+	s.URLs[shortURL] = URLInfo{OriginalURL: originalURL, UserID: userID}
 	return nil
 }
 
-func (s *URLStorage) AddURLs(urls map[string]string) error {
+func (s *URLStorage) AddURLs(urls map[string]string, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for shortURL, originalURL := range urls {
-		s.URLs[shortURL] = originalURL
+		s.URLs[shortURL] = URLInfo{OriginalURL: originalURL, UserID: userID}
 	}
 	return nil
 }
@@ -34,35 +39,50 @@ func (s *URLStorage) AddURLs(urls map[string]string) error {
 func (s *URLStorage) GetURL(shortURL string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	originalURL, exists := s.URLs[shortURL]
-	return originalURL, exists
+	info, exists := s.URLs[shortURL]
+	if !exists {
+		return "", false
+	}
+	return info.OriginalURL, true
+}
+
+func (s *URLStorage) GetURLsByUser(userID string) (map[string]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	urls := make(map[string]string)
+	for short, info := range s.URLs {
+		if info.UserID == userID {
+			urls[short] = info.OriginalURL
+		}
+	}
+	return urls, nil
 }
 
 func (s *URLStorage) GetAllURLs() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	copyMap := make(map[string]string)
-	for k, v := range s.URLs {
-		copyMap[k] = v
+	urlMap := make(map[string]string)
+	for short, info := range s.URLs {
+		urlMap[short] = info.OriginalURL
 	}
-	return copyMap
+	return urlMap
 }
 
 func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for shortURL, url := range s.URLs {
-		if url == originalURL {
-			return shortURL, true
+	for short, info := range s.URLs {
+		if info.OriginalURL == originalURL {
+			return short, true
 		}
 	}
 	return "", false
 }
 
 func (s *URLStorage) Ping() error {
-	return nil // In-memory storage doesn't need to ping anything
+	return nil
 }
 
 func (s *URLStorage) Close() error {
-	return nil // In-memory storage doesn't need to close anything
+	return nil
 }
