@@ -287,12 +287,28 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		if err := storageInstance.DeleteURLs(shortURLs, ""); err != nil {
-			http.Error(w, "Failed to delete URLs", http.StatusInternalServerError)
-			return
-		}
+		// Создаем канал для обработки удаления
+		deleteChan := make(chan error)
 
+		// Запускаем горутину для удаления
+		go func() {
+			// Удаление URL
+			err := storageInstance.DeleteURLs(shortURLs, "")
+			deleteChan <- err
+		}()
+
+		// Возвращаем статус 202 Accepted сразу
 		w.WriteHeader(http.StatusAccepted)
+
+		// Обработка результата удаления (можно логировать или обрабатывать по мере необходимости)
+		go func() {
+			err := <-deleteChan
+			if err != nil {
+				log.Printf("Failed to delete URLs: %v", err)
+			} else {
+				log.Println("URLs deleted successfully")
+			}
+		}()
 	}
 }
 
