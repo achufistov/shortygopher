@@ -168,10 +168,15 @@ func HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	originalURL, exists := storageInstance.GetURL(id)
+	originalURL, exists, isDeleted := storageInstance.GetURL(id)
 
 	if !exists {
 		http.Error(w, "URL not found", http.StatusNotFound)
+		return
+	}
+
+	if isDeleted {
+		http.Error(w, "URL has been deleted", http.StatusGone)
 		return
 	}
 

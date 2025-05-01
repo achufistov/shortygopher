@@ -76,18 +76,15 @@ func (s *DBStorage) AddURLs(urls map[string]string, userID string) error {
 	return nil
 }
 
-func (s *DBStorage) GetURL(shortURL string) (string, bool) {
+func (s *DBStorage) GetURL(shortURL string) (string, bool, bool) {
 	var originalURL string
 	var isDeleted bool
 	query := `SELECT url, is_deleted FROM urls WHERE short_url = $1`
 	err := s.db.QueryRow(query, shortURL).Scan(&originalURL, &isDeleted)
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
-	if isDeleted {
-		return "", false
-	}
-	return originalURL, true
+	return originalURL, true, isDeleted
 }
 
 func (s *DBStorage) GetAllURLs() map[string]string {

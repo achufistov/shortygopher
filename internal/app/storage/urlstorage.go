@@ -7,6 +7,7 @@ import (
 type URLInfo struct {
 	OriginalURL string
 	UserID      string
+	DeletedFlag bool
 }
 
 type URLStorage struct {
@@ -36,14 +37,14 @@ func (s *URLStorage) AddURLs(urls map[string]string, userID string) error {
 	return nil
 }
 
-func (s *URLStorage) GetURL(shortURL string) (string, bool) {
+func (s *URLStorage) GetURL(shortURL string) (string, bool, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	info, exists := s.URLs[shortURL]
 	if !exists {
-		return "", false
+		return "", false, false
 	}
-	return info.OriginalURL, true
+	return info.OriginalURL, true, info.DeletedFlag
 }
 
 func (s *URLStorage) GetURLsByUser(userID string) (map[string]string, error) {
@@ -84,7 +85,7 @@ func (s *URLStorage) DeleteURLs(shortURLs []string, userID string) error {
 	defer s.mu.Unlock()
 	for _, shortURL := range shortURLs {
 		if info, exists := s.URLs[shortURL]; exists && info.UserID == userID {
-			info.UserID = ""
+			info.DeletedFlag = true
 			s.URLs[shortURL] = info
 		}
 	}
