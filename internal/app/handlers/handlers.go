@@ -168,10 +168,15 @@ func HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	originalURL, exists := storageInstance.GetURL(id)
+	originalURL, exists, isDeleted := storageInstance.GetURL(id)
 
 	if !exists {
 		http.Error(w, "URL not found", http.StatusNotFound)
+		return
+	}
+
+	if isDeleted {
+		http.Error(w, "URL has been deleted", http.StatusGone)
 		return
 	}
 
@@ -281,33 +286,34 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Проверка наличия куки
-		_, err := r.Cookie("auth_token")
-		if err == http.ErrNoCookie {
-			http.Error(w, "Unable to delete url without cookie", http.StatusUnauthorized)
-			return
-		}
-
-		// Если кука есть, продолжаем обработку
 		var shortURLs []string
 		if err := json.NewDecoder(r.Body).Decode(&shortURLs); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-		if !ok || userID == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+		// Создаем канал для обработки удаления
+		deleteChan := make(chan error)
 
-		if err := storageInstance.DeleteURLs(shortURLs, userID); err != nil {
-			http.Error(w, "Failed to delete URLs", http.StatusInternalServerError)
-			return
-		}
+		// Запускаем горутину для удаления
+		go func() {
+			// Удаление URL
+			err := storageInstance.DeleteURLs(shortURLs, "")
+			deleteChan <- err
+		}()
 
+		// Возвращаем статус 202 Accepted сразу
 		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintln(w, "URL deleted successfully")
+
+		// Обработка результата удаления (можно логировать или обрабатывать по мере необходимости)
+		go func() {
+			err := <-deleteChan
+			if err != nil {
+				log.Printf("Failed to delete URLs: %v", err)
+			} else {
+				log.Println("URLs deleted successfully")
+			}
+		}()
 	}
 }
 

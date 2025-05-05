@@ -76,18 +76,15 @@ func (s *DBStorage) AddURLs(urls map[string]string, userID string) error {
 	return nil
 }
 
-func (s *DBStorage) GetURL(shortURL string) (string, bool) {
+func (s *DBStorage) GetURL(shortURL string) (string, bool, bool) {
 	var originalURL string
 	var isDeleted bool
 	query := `SELECT url, is_deleted FROM urls WHERE short_url = $1`
 	err := s.db.QueryRow(query, shortURL).Scan(&originalURL, &isDeleted)
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
-	if isDeleted {
-		return "", false
-	}
-	return originalURL, true
+	return originalURL, true, isDeleted
 }
 
 func (s *DBStorage) GetAllURLs() map[string]string {
@@ -153,8 +150,8 @@ func (s *DBStorage) GetURLsByUser(userID string) (map[string]string, error) {
 }
 
 func (s *DBStorage) DeleteURLs(shortURLs []string, userID string) error {
-	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1) AND user_id = $2`
-	_, err := s.db.Exec(query, pq.Array(shortURLs), userID)
+	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1)`
+	_, err := s.db.Exec(query, pq.Array(shortURLs))
 	return err
 }
 
