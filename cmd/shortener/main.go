@@ -14,10 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	cfg *config.Config
-)
-
 func initLogger() (*zap.Logger, error) {
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -27,7 +23,6 @@ func initLogger() (*zap.Logger, error) {
 }
 
 func main() {
-	var err error
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
@@ -44,7 +39,6 @@ func main() {
 		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
 		if err != nil {
 			log.Printf("Error initializing database storage: %v", err)
-			// сlosing resources if they have been opened before os.Exit(1)
 			if dbStorage != nil {
 				dbStorage.Close()
 			}
@@ -62,7 +56,7 @@ func main() {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			err := storageInstance.AddURL(shortURL, originalURL)
+			err := storageInstance.AddURL(shortURL, originalURL, "system")
 			if err != nil {
 				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
 			}
@@ -75,13 +69,12 @@ func main() {
 
 	r.Use(middleware.LoggingMiddleware(logger))
 	r.Use(middleware.GzipMiddleware)
+	r.Use(middleware.AuthMiddleware(cfg))
 
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandlePost(cfg, w, r)
 	})
-	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandleGet(w, r)
-	})
+	r.Get("/{id}", handlers.HandleGet)
 	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleShortenPost(cfg, w, r)
 	})
@@ -89,7 +82,8 @@ func main() {
 		handlers.HandleBatchShortenPost(cfg, w, r)
 	})
 	r.Get("/ping", handlers.HandlePing(storageInstance))
-
+	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
+	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
 }

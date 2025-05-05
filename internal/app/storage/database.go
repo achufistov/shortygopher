@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 type DBStorage struct {
@@ -24,7 +24,9 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	CREATE TABLE IF NOT EXISTS urls (
 		id SERIAL PRIMARY KEY,
 		url TEXT NOT NULL UNIQUE,
-		short_url TEXT NOT NULL UNIQUE
+		short_url TEXT NOT NULL UNIQUE,
+		user_id TEXT NOT NULL,
+		is_deleted BOOLEAN DEFAULT FALSE
 	);
 	`
 	if _, err = db.Exec(createTableQuery); err != nil {
@@ -34,18 +36,17 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 	return &DBStorage{db: db}, nil
 }
 
-func (s *DBStorage) AddURL(shortURL, originalURL string) error {
+func (s *DBStorage) AddURL(shortURL, originalURL, userID string) error {
 	query := `
-    INSERT INTO urls (url, short_url)
-    VALUES ($1, $2)
+    INSERT INTO urls (url, short_url, user_id)
+    VALUES ($1, $2, $3)
     ON CONFLICT (url) DO NOTHING
     RETURNING short_url;
     `
 	var existingShortURL string
-	err := s.db.QueryRow(query, originalURL, shortURL).Scan(&existingShortURL)
+	err := s.db.QueryRow(query, originalURL, shortURL, userID).Scan(&existingShortURL)
 	if err != nil {
 		if err == sql.ErrNoRows {
-
 			return fmt.Errorf("URL already exists")
 		}
 		return fmt.Errorf("failed to add URL to database: %v", err)
@@ -53,15 +54,15 @@ func (s *DBStorage) AddURL(shortURL, originalURL string) error {
 	return nil
 }
 
-func (s *DBStorage) AddURLs(urls map[string]string) error {
+func (s *DBStorage) AddURLs(urls map[string]string, userID string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
 
-	query := `INSERT INTO urls (url, short_url) VALUES ($1, $2)`
+	query := `INSERT INTO urls (url, short_url, user_id) VALUES ($1, $2, $3)`
 	for shortURL, originalURL := range urls {
-		_, err := tx.Exec(query, originalURL, shortURL)
+		_, err := tx.Exec(query, originalURL, shortURL, userID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to add URL to database: %v", err)
@@ -75,14 +76,15 @@ func (s *DBStorage) AddURLs(urls map[string]string) error {
 	return nil
 }
 
-func (s *DBStorage) GetURL(shortURL string) (string, bool) {
+func (s *DBStorage) GetURL(shortURL string) (string, bool, bool) {
 	var originalURL string
-	query := `SELECT url FROM urls WHERE short_url = $1`
-	err := s.db.QueryRow(query, shortURL).Scan(&originalURL)
+	var isDeleted bool
+	query := `SELECT url, is_deleted FROM urls WHERE short_url = $1`
+	err := s.db.QueryRow(query, shortURL).Scan(&originalURL, &isDeleted)
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
-	return originalURL, true
+	return originalURL, true, isDeleted
 }
 
 func (s *DBStorage) GetAllURLs() map[string]string {
@@ -121,6 +123,36 @@ func (s *DBStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) 
 		return "", false
 	}
 	return shortURL, true
+}
+
+func (s *DBStorage) GetURLsByUser(userID string) (map[string]string, error) {
+	urlMap := make(map[string]string)
+	query := `SELECT short_url, url FROM urls WHERE user_id = $1`
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query URLs by user: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var shortURL, originalURL string
+		if err := rows.Scan(&shortURL, &originalURL); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		urlMap[shortURL] = originalURL
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %v", err)
+	}
+
+	return urlMap, nil
+}
+
+func (s *DBStorage) DeleteURLs(shortURLs []string, userID string) error {
+	query := `UPDATE urls SET is_deleted = TRUE WHERE short_url = ANY($1)`
+	_, err := s.db.Exec(query, pq.Array(shortURLs))
+	return err
 }
 
 func (s *DBStorage) Ping() error {
