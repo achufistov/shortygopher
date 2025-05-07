@@ -6,10 +6,9 @@ import (
 	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
-	"github.com/achufistov/shortygopher.git/internal/app/handlers"
+	"github.com/achufistov/shortygopher.git/internal/app/controllers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
-
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -46,44 +45,40 @@ func main() {
 		}
 		defer dbStorage.Close()
 		storageInstance = dbStorage
+	} else if cfg.FileStorage != "" {
+		fileStorage, err := storage.NewFileStorage(cfg.FileStorage)
+		if err != nil {
+			log.Printf("Error initializing file storage: %v", err)
+			os.Exit(1)
+		}
+		defer fileStorage.Close()
+		storageInstance = fileStorage
 	} else {
-		log.Println("Database DSN is empty, using in-memory storage")
+		log.Println("No storage configured, using in-memory storage")
 		storageInstance = storage.NewURLStorage()
 	}
 
-	urlMappings, err := storage.LoadURLMappings(cfg.FileStorage)
-	if err != nil {
-		log.Printf("Error loading URL mappings: %v", err)
-	} else {
-		for shortURL, originalURL := range urlMappings {
-			err := storageInstance.AddURL(shortURL, originalURL, "system")
-			if err != nil {
-				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
-			}
-		}
-	}
-
-	handlers.InitStorage(storageInstance)
+	// Initialize controller
+	urlController := controllers.NewURLController(storageInstance)
 
 	r := chi.NewRouter()
 
+	// Middleware
 	r.Use(middleware.LoggingMiddleware(logger))
 	r.Use(middleware.GzipMiddleware)
 	r.Use(middleware.AuthMiddleware(cfg))
 
-	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandlePost(cfg, w, r)
+	// Routes
+	r.Post("/", urlController.HandleShorten)
+	r.Get("/{id}", urlController.HandleGet)
+	r.Post("/api/shorten", urlController.HandleShorten)
+	r.Post("/api/shorten/batch", urlController.HandleBatchShorten)
+	r.Get("/api/user/urls", urlController.HandleGetUserURLs)
+	r.Delete("/api/user/urls", urlController.HandleDeleteUserURLs)
+	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
 	})
-	r.Get("/{id}", handlers.HandleGet)
-	r.Post("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandleShortenPost(cfg, w, r)
-	})
-	r.Post("/api/shorten/batch", func(w http.ResponseWriter, r *http.Request) {
-		handlers.HandleBatchShortenPost(cfg, w, r)
-	})
-	r.Get("/ping", handlers.HandlePing(storageInstance))
-	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
-	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
+
 	log.Printf("Server is running on %s", cfg.Address)
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
 }
