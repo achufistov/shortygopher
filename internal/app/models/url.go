@@ -7,14 +7,14 @@ import (
 	"net/url"
 )
 
-// URL представляет собой модель для сокращенного URL
+// URL is a model for a shortened URL
 type URL struct {
 	OriginalURL string `json:"original_url"`
 	ShortURL    string `json:"short_url"`
 	UserID      string `json:"user_id"`
 }
 
-// URLRepository определяет интерфейс для работы с хранилищем URL
+// URLRepository defines the interface for working with URL storage
 type URLRepository interface {
 	AddURL(shortURL, originalURL, userID string) error
 	AddURLs(urls map[string]string, userID string) error
@@ -28,7 +28,7 @@ type URLRepository interface {
 	GetUserURLs(userID string) ([]URL, error)
 }
 
-// ValidateURL проверяет корректность URL
+// ValidateURL verifies the correctness of the URL
 func ValidateURL(rawURL string) error {
 	_, err := url.ParseRequestURI(rawURL)
 	if err != nil {
@@ -37,7 +37,7 @@ func ValidateURL(rawURL string) error {
 	return nil
 }
 
-// GenerateShortURL создает короткий URL
+// GenerateShortURL creates a short URL
 func GenerateShortURL() string {
 	b := make([]byte, 6)
 	_, err := rand.Read(b)

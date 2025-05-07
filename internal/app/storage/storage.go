@@ -7,7 +7,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/models"
 )
 
-// Storage определяет интерфейс для работы с хранилищем
+// Storage defines the interface for working with the storage
 type Storage interface {
 	AddURL(shortURL, originalURL, userID string) error
 	AddURLs(urls map[string]string, userID string) error
@@ -21,27 +21,27 @@ type Storage interface {
 	GetUserURLs(userID string) ([]models.URL, error)
 }
 
-// URLInfo содержит информацию о URL
+// URLInfo contains information about a URL
 type URLInfo struct {
 	OriginalURL string
 	UserID      string
 	DeletedFlag bool
 }
 
-// URLStorage реализует in-memory хранилище URL
+// URLStorage implements in-memory URL storage
 type URLStorage struct {
 	mu   sync.RWMutex
 	URLs map[string]URLInfo
 }
 
-// NewURLStorage создает новый экземпляр URLStorage
+// NewURLStorage creates a new URLStorage instance
 func NewURLStorage() *URLStorage {
 	return &URLStorage{
 		URLs: make(map[string]URLInfo),
 	}
 }
 
-// AddURL добавляет URL в хранилище
+// AddURL adds a URL to the storage
 func (s *URLStorage) AddURL(shortURL, originalURL, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -49,7 +49,7 @@ func (s *URLStorage) AddURL(shortURL, originalURL, userID string) error {
 	return nil
 }
 
-// AddURLs добавляет несколько URL в хранилище
+// AddURLs adds multiple URLs to the storage
 func (s *URLStorage) AddURLs(urls map[string]string, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -59,7 +59,7 @@ func (s *URLStorage) AddURLs(urls map[string]string, userID string) error {
 	return nil
 }
 
-// GetURL получает оригинальный URL по сокращенному
+// GetURL gets the original URL by the shortened URL
 func (s *URLStorage) GetURL(shortURL string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -73,7 +73,7 @@ func (s *URLStorage) GetURL(shortURL string) (string, error) {
 	return info.OriginalURL, nil
 }
 
-// GetURLsByUser получает все URL пользователя в виде map
+// GetURLsByUser gets all user URLs in the form of a map
 func (s *URLStorage) GetURLsByUser(userID string) (map[string]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -86,7 +86,7 @@ func (s *URLStorage) GetURLsByUser(userID string) (map[string]string, error) {
 	return urls, nil
 }
 
-// GetAllURLs получает все URL
+// GetAllURLs gets all URLs
 func (s *URLStorage) GetAllURLs() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -99,7 +99,7 @@ func (s *URLStorage) GetAllURLs() map[string]string {
 	return urlMap
 }
 
-// GetShortURLByOriginalURL получает сокращенный URL по оригинальному
+// GetShortURLByOriginalURL gets the shortened URL by the original URL
 func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -111,7 +111,7 @@ func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool)
 	return "", false
 }
 
-// GetUserURLs получает все URL пользователя в виде слайса моделей
+// GetUserURLs gets all user URLs in the form of a slice of models
 func (s *URLStorage) GetUserURLs(userID string) ([]models.URL, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -128,7 +128,7 @@ func (s *URLStorage) GetUserURLs(userID string) ([]models.URL, error) {
 	return urls, nil
 }
 
-// DeleteURLs удаляет URL пользователя
+// DeleteURLs deletes URLs
 func (s *URLStorage) DeleteURLs(shortURLs []string, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -141,12 +141,12 @@ func (s *URLStorage) DeleteURLs(shortURLs []string, userID string) error {
 	return nil
 }
 
-// Ping проверяет доступность хранилища
+// Ping checks the storage availability
 func (s *URLStorage) Ping() error {
 	return nil
 }
 
-// Close закрывает хранилище
+// Close closes the storage
 func (s *URLStorage) Close() error {
 	return nil
 }

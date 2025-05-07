@@ -24,7 +24,7 @@ func NewDBStorage(dsn string) (*DBStorage, error) {
 		return nil, fmt.Errorf("failed to ping database: %v", err)
 	}
 
-	// Создаем таблицы, если они не существуют
+	// Create tables if they don't exist
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS urls (
 			short_url VARCHAR(255) PRIMARY KEY,

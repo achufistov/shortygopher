@@ -8,13 +8,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// FileStorage реализует хранилище URL в файле
+// FileStorage implements URL storage in a file
 type FileStorage struct {
 	filePath string
 	storage  *URLStorage
 }
 
-// NewFileStorage создает новый экземпляр FileStorage
+// NewFileStorage creates a new FileStorage instance
 func NewFileStorage(filePath string) (*FileStorage, error) {
 	storage := NewURLStorage()
 	fs := &FileStorage{
@@ -22,13 +22,13 @@ func NewFileStorage(filePath string) (*FileStorage, error) {
 		storage:  storage,
 	}
 
-	// Загружаем существующие URL из файла
+	// Load existing URLs from a file
 	urlMap, err := fs.loadURLMappings()
 	if err != nil {
 		return nil, err
 	}
 
-	// Добавляем загруженные URL в хранилище
+	// Add loaded URLs to the storage
 	for shortURL, originalURL := range urlMap {
 		if err := storage.AddURL(shortURL, originalURL, "system"); err != nil {
 			return nil, err
@@ -38,7 +38,7 @@ func NewFileStorage(filePath string) (*FileStorage, error) {
 	return fs, nil
 }
 
-// loadURLMappings загружает URL из файла
+// loadURLMappings loads URLs from a file
 func (fs *FileStorage) loadURLMappings() (map[string]string, error) {
 	urlMap := make(map[string]string)
 	if fs.filePath == "" {
@@ -62,7 +62,7 @@ func (fs *FileStorage) loadURLMappings() (map[string]string, error) {
 	}
 
 	if err := json.Unmarshal(data, &mappings); err != nil {
-		// Если не удалось распарсить как массив, пробуем как map
+		// If it's not possible to parse as an array, try parsing as a map
 		var mapData map[string]string
 		if err := json.Unmarshal(data, &mapData); err != nil {
 			return nil, err
@@ -76,7 +76,7 @@ func (fs *FileStorage) loadURLMappings() (map[string]string, error) {
 	return urlMap, nil
 }
 
-// saveURLMappings сохраняет URL в файл
+// saveURLMappings saves URLs to a file
 func (fs *FileStorage) saveURLMappings() error {
 	if fs.filePath == "" {
 		return nil
@@ -115,7 +115,7 @@ func (fs *FileStorage) saveURLMappings() error {
 	return nil
 }
 
-// AddURL добавляет URL в хранилище
+// AddURL adds a URL to the storage
 func (fs *FileStorage) AddURL(shortURL, originalURL, userID string) error {
 	if err := fs.storage.AddURL(shortURL, originalURL, userID); err != nil {
 		return err
@@ -123,7 +123,7 @@ func (fs *FileStorage) AddURL(shortURL, originalURL, userID string) error {
 	return fs.saveURLMappings()
 }
 
-// AddURLs добавляет несколько URL в хранилище
+// AddURLs adds multiple URLs to the storage
 func (fs *FileStorage) AddURLs(urls map[string]string, userID string) error {
 	if err := fs.storage.AddURLs(urls, userID); err != nil {
 		return err
@@ -131,32 +131,32 @@ func (fs *FileStorage) AddURLs(urls map[string]string, userID string) error {
 	return fs.saveURLMappings()
 }
 
-// GetURL получает оригинальный URL по сокращенному
+// GetURL gets the original URL by the shortened URL
 func (fs *FileStorage) GetURL(shortURL string) (string, error) {
 	return fs.storage.GetURL(shortURL)
 }
 
-// GetURLsByUser получает все URL пользователя
+// GetURLsByUser gets all user URLs
 func (fs *FileStorage) GetURLsByUser(userID string) (map[string]string, error) {
 	return fs.storage.GetURLsByUser(userID)
 }
 
-// GetAllURLs получает все URL
+// GetAllURLs gets all URLs
 func (fs *FileStorage) GetAllURLs() map[string]string {
 	return fs.storage.GetAllURLs()
 }
 
-// GetShortURLByOriginalURL получает сокращенный URL по оригинальному
+// GetShortURLByOriginalURL gets the shortened URL by the original URL
 func (fs *FileStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
 	return fs.storage.GetShortURLByOriginalURL(originalURL)
 }
 
-// GetUserURLs получает все URL пользователя в виде слайса моделей
+// GetUserURLs gets all user URLs in the form of a slice of models
 func (fs *FileStorage) GetUserURLs(userID string) ([]models.URL, error) {
 	return fs.storage.GetUserURLs(userID)
 }
 
-// DeleteURLs удаляет URL пользователя
+// DeleteURLs deletes URLs
 func (fs *FileStorage) DeleteURLs(shortURLs []string, userID string) error {
 	if err := fs.storage.DeleteURLs(shortURLs, userID); err != nil {
 		return err
@@ -164,12 +164,12 @@ func (fs *FileStorage) DeleteURLs(shortURLs []string, userID string) error {
 	return fs.saveURLMappings()
 }
 
-// Ping проверяет доступность хранилища
+// Ping checks the storage availability
 func (fs *FileStorage) Ping() error {
 	return nil
 }
 
-// Close закрывает хранилище
+// Closes the storage
 func (fs *FileStorage) Close() error {
 	return fs.saveURLMappings()
 }
