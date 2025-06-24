@@ -96,9 +96,10 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-		return
+	if cfg.FileStorage != "" {
+		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, originalURL); err != nil {
+			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
@@ -146,10 +147,13 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-		return
+
+	if cfg.FileStorage != "" {
+		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, req.OriginalURL); err != nil {
+			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
+		}
 	}
+
 	resp := ShortenResponse{
 		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
 	}
@@ -217,7 +221,11 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 		http.Error(w, "Empty batch", http.StatusBadRequest)
 		return
 	}
+
 	batchResponses := make([]BatchResponse, 0, len(batchRequests))
+
+	urlsToSave := make(map[string]string, len(batchRequests))
+
 	for _, req := range batchRequests {
 		shortURL := generateShortURL()
 		err := storageInstance.AddURL(shortURL, req.OriginalURL, userID)
@@ -229,11 +237,15 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 			CorrelationID: req.CorrelationID,
 			ShortURL:      fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
 		})
+		urlsToSave[shortURL] = req.OriginalURL
 	}
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mappings", http.StatusInternalServerError)
-		return
+
+	if cfg.FileStorage != "" && len(urlsToSave) > 0 {
+		if err := storage.SaveURLMappings(cfg.FileStorage, urlsToSave); err != nil {
+			log.Printf("Warning: Failed to save URL mappings to file: %v", err)
+		}
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(batchResponses); err != nil {
@@ -292,20 +304,15 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Создаем канал для обработки удаления
 		deleteChan := make(chan error)
 
-		// Запускаем горутину для удаления
 		go func() {
-			// Удаление URL
 			err := storageInstance.DeleteURLs(shortURLs, "")
 			deleteChan <- err
 		}()
 
-		// Возвращаем статус 202 Accepted сразу
 		w.WriteHeader(http.StatusAccepted)
 
-		// Обработка результата удаления (можно логировать или обрабатывать по мере необходимости)
 		go func() {
 			err := <-deleteChan
 			if err != nil {

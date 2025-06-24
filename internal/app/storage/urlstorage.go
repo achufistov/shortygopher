@@ -11,14 +11,23 @@ type URLInfo struct {
 }
 
 type URLStorage struct {
-	mu   sync.RWMutex
-	URLs map[string]URLInfo
+	mu      sync.RWMutex
+	URLs    map[string]URLInfo
+	mapPool sync.Pool
 }
 
 func NewURLStorage() *URLStorage {
-	return &URLStorage{
-		URLs: make(map[string]URLInfo),
+	storage := &URLStorage{
+		URLs: make(map[string]URLInfo, 1000),
 	}
+
+	storage.mapPool = sync.Pool{
+		New: func() interface{} {
+			return make(map[string]string, 100)
+		},
+	}
+
+	return storage
 }
 
 func (s *URLStorage) AddURL(shortURL, originalURL, userID string) error {
@@ -50,23 +59,49 @@ func (s *URLStorage) GetURL(shortURL string) (string, bool, bool) {
 func (s *URLStorage) GetURLsByUser(userID string) (map[string]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	urls := make(map[string]string)
+
+	urls := s.mapPool.Get().(map[string]string)
+	defer func() {
+		for k := range urls {
+			delete(urls, k)
+		}
+		s.mapPool.Put(urls)
+	}()
+
+	result := make(map[string]string, len(urls))
+
 	for short, info := range s.URLs {
 		if info.UserID == userID {
-			urls[short] = info.OriginalURL
+			result[short] = info.OriginalURL
 		}
 	}
-	return urls, nil
+	return result, nil
 }
 
 func (s *URLStorage) GetAllURLs() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	urlMap := make(map[string]string)
+
+	urlMap := make(map[string]string, len(s.URLs))
 	for short, info := range s.URLs {
 		urlMap[short] = info.OriginalURL
 	}
 	return urlMap
+}
+
+func (s *URLStorage) IterateURLs(fn func(shortURL, originalURL string)) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for short, info := range s.URLs {
+		fn(short, info.OriginalURL)
+	}
+}
+
+func (s *URLStorage) Count() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.URLs)
 }
 
 func (s *URLStorage) GetShortURLByOriginalURL(originalURL string) (string, bool) {
