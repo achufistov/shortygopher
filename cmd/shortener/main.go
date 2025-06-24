@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
@@ -70,6 +71,9 @@ func main() {
 	r.Use(middleware.LoggingMiddleware(logger))
 	r.Use(middleware.GzipMiddleware)
 	r.Use(middleware.AuthMiddleware(cfg))
+
+	// Add pprof routes for profiling
+	r.Mount("/debug/pprof", http.DefaultServeMux)
 
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandlePost(cfg, w, r)

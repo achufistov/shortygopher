@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -15,16 +16,28 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var (
-	cfg *config.Config
-)
+var cfg *config.Config
 
 func initConfig() {
-
-	var err error
-	cfg, err = config.LoadConfig()
+	// Создаем временный JWT секрет для тестов
+	err := os.MkdirAll("./secrets", 0755)
 	if err != nil {
 		panic(err)
+	}
+
+	secretFile := "./secrets/jwt_secret.key"
+	err = os.WriteFile(secretFile, []byte("test-jwt-secret-for-integration-tests"), 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	// Устанавливаем переменную окружения для JWT секрета
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+
+	var err2 error
+	cfg, err2 = config.LoadConfig()
+	if err2 != nil {
+		panic(err2)
 	}
 }
 
