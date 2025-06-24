@@ -129,17 +129,13 @@ func SaveURLMappings(filePath string, urlMap map[string]string) error {
 		saver.AddURL(shortURL, originalURL)
 	}
 
-	if len(urlMap) > 100 {
-		return saver.forceSave()
-	}
-
-	return nil
+	return saver.forceSave()
 }
 
 func SaveSingleURLMapping(filePath string, shortURL, originalURL string) error {
 	saver := GetBatchSaver(filePath)
 	saver.AddURL(shortURL, originalURL)
-	return nil
+	return saver.forceSave()
 }
 
 func generateUUID() string {

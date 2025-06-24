@@ -31,7 +31,6 @@ urls.json*
 # Secrets and sensitive data
 secrets/
 scripts/
-*.key
 *.pem
 *.crt
 
