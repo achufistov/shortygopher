@@ -13,8 +13,19 @@ import (
 
 type contextKey string
 
+// UserIDKey is the context key used to store and retrieve user ID from request context.
+// Used by authentication middleware to pass user information between handlers.
 const UserIDKey contextKey = "userID"
 
+// AuthMiddleware returns HTTP middleware that handles JWT-based authentication.
+// Validates existing JWT tokens from cookies or creates new ones for unauthenticated users.
+// Sets user ID in request context for downstream handlers to access.
+//
+// The middleware:
+//   - Checks for existing auth_token cookie
+//   - Validates JWT token if present
+//   - Generates new JWT token and sets cookie for new users
+//   - Adds user ID to request context using UserIDKey
 func AuthMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

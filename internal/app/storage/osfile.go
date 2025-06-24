@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// URLMapping represents a single URL mapping entry for JSON serialization.
+// Used for storing URL data in JSON Lines format.
 type URLMapping struct {
 	UUID        string `json:"uuid"`
 	ShortURL    string `json:"short_url"`
@@ -17,6 +19,8 @@ type URLMapping struct {
 	UserID      string `json:"user_id"`
 }
 
+// BatchFileSaver provides efficient batch saving of URL mappings to file.
+// Accumulates URLs in memory and periodically saves them to reduce I/O operations.
 type BatchFileSaver struct {
 	mu           sync.Mutex
 	pendingURLs  map[string]string
@@ -29,6 +33,8 @@ var (
 	globalSaverOnce sync.Once
 )
 
+// GetBatchSaver returns a singleton BatchFileSaver instance for the given file path.
+// Ensures only one saver exists per file to avoid conflicts.
 func GetBatchSaver(filePath string) *BatchFileSaver {
 	globalSaverOnce.Do(func() {
 		globalSaver = &BatchFileSaver{
@@ -41,12 +47,15 @@ func GetBatchSaver(filePath string) *BatchFileSaver {
 	return globalSaver
 }
 
+// AddURL adds a URL mapping to the pending save queue.
+// Thread-safe operation that queues URL for next batch save.
 func (b *BatchFileSaver) AddURL(shortURL, originalURL string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.pendingURLs[shortURL] = originalURL
 }
 
+// periodicSave runs in a goroutine to save pending URLs at regular intervals.
 func (b *BatchFileSaver) periodicSave() {
 	ticker := time.NewTicker(b.saveInterval)
 	defer ticker.Stop()
@@ -98,6 +107,8 @@ func (b *BatchFileSaver) saveToFile() error {
 	return os.Rename(tmpFile, b.filePath)
 }
 
+// LoadURLMappings loads URL mappings from a JSON Lines file.
+// Returns empty map if file doesn't exist. Skips invalid JSON entries.
 func LoadURLMappings(filePath string) (map[string]string, error) {
 	urlMap := make(map[string]string)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -122,6 +133,8 @@ func LoadURLMappings(filePath string) (map[string]string, error) {
 	return urlMap, scanner.Err()
 }
 
+// SaveURLMappings saves a map of URL mappings to file using batch saver.
+// More efficient than saving individual URLs.
 func SaveURLMappings(filePath string, urlMap map[string]string) error {
 	saver := GetBatchSaver(filePath)
 
@@ -132,6 +145,8 @@ func SaveURLMappings(filePath string, urlMap map[string]string) error {
 	return saver.forceSave()
 }
 
+// SaveSingleURLMapping saves a single URL mapping to file using batch saver.
+// Convenience function for saving individual URLs.
 func SaveSingleURLMapping(filePath string, shortURL, originalURL string) error {
 	saver := GetBatchSaver(filePath)
 	saver.AddURL(shortURL, originalURL)

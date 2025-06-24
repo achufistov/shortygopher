@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// ShortenRequest represents the JSON request body for shortening a URL.
+// Used by the profiler to generate load test requests.
 type ShortenRequest struct {
 	OriginalURL string `json:"url"`
 }
