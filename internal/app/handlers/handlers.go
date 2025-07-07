@@ -1,3 +1,4 @@
+// Package handlers provides HTTP handlers for the URL shortening service.
 package handlers
 
 import (
@@ -16,32 +17,71 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var (
-	storageInstance storage.Storage
-)
+var storageInstance storage.Storage
 
+// ShortenRequest represents a URL shortening request in JSON format.
+// Used in the POST /api/shorten endpoint.
+//
+// Example JSON:
+//
+//	{
+//	  "url": "https://example.com/very/long/path"
+//	}
 type ShortenRequest struct {
 	OriginalURL string `json:"url"`
 }
 
+// ShortenResponse represents a URL shortening response in JSON format.
+// Returned from the POST /api/shorten endpoint.
+//
+// Example JSON:
+//
+//	{
+//	  "result": "http://localhost:8080/abc123"
+//	}
 type ShortenResponse struct {
 	ShortURL string `json:"result"`
 }
 
+// BatchRequest represents one item in a batch request for shortening multiple URLs.
+// Used in the POST /api/shorten/batch endpoint.
 type BatchRequest struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
 }
 
+// BatchResponse represents one item in a batch response for shortening multiple URLs.
+// Returned from the POST /api/shorten/batch endpoint.
 type BatchResponse struct {
 	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`
 }
 
+// InitStorage initializes the global storage instance.
+// Must be called before using any handlers.
+//
+// Example:
+//
+//	storage := storage.NewURLStorage()
+//	handlers.InitStorage(storage)
 func InitStorage(storage storage.Storage) {
 	storageInstance = storage
 }
 
+// HandlePost handles POST / requests for URL shortening in text format.
+// Accepts the original URL in the request body as text/plain.
+// Returns the shortened URL in the response body.
+//
+// HTTP methods: POST
+// Content-Type: text/plain
+// Response: text/plain with shortened URL
+//
+// Response codes:
+//   - 201: URL successfully shortened
+//   - 400: Invalid request method or Content-Type
+//   - 401: User not authorized
+//   - 409: URL already exists
+//   - 500: Internal server error
 func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
@@ -96,9 +136,10 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-		return
+	if cfg.FileStorage != "" {
+		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, originalURL); err != nil {
+			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
@@ -106,6 +147,19 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s/%s", cfg.BaseURL, shortURL)
 }
 
+// HandleShortenPost handles POST /api/shorten requests for URL shortening in JSON format.
+// Accepts JSON with original URL and returns JSON with shortened URL.
+//
+// HTTP methods: POST
+// Content-Type: application/json
+// Response: application/json with ShortenResponse object
+//
+// Response codes:
+//   - 201: URL successfully shortened
+//   - 400: Invalid request method or JSON
+//   - 401: User not authorized
+//   - 409: URL already exists
+//   - 500: Internal server error
 func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
@@ -146,10 +200,13 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
 		return
 	}
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-		return
+
+	if cfg.FileStorage != "" {
+		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, req.OriginalURL); err != nil {
+			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
+		}
 	}
+
 	resp := ShortenResponse{
 		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
 	}
@@ -161,6 +218,18 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// HandleGet handles GET /{id} requests for redirecting to the original URL.
+// Looks up the original URL by short identifier and performs HTTP redirect.
+//
+// HTTP methods: GET
+// URL parameters: id - short URL identifier
+// Response: HTTP redirect (307 Temporary Redirect)
+//
+// Response codes:
+//   - 307: Successful redirect to original URL
+//   - 400: Invalid request method
+//   - 404: URL not found
+//   - 410: URL was deleted
 func HandleGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
@@ -184,6 +253,17 @@ func HandleGet(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
+// HandlePing returns a handler for checking storage availability.
+// The endpoint is used for health checks and monitoring.
+//
+// HTTP methods: GET
+// URL: /ping
+// Response: HTTP status without body
+//
+// Response codes:
+//   - 200: Storage is available
+//   - 400: Invalid request method
+//   - 500: Storage is unavailable
 func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -198,6 +278,25 @@ func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 	}
 }
 
+// HandleBatchShortenPost handles POST /api/shorten/batch requests for shortening multiple URLs at once.
+// Accepts an array of BatchRequest and returns an array of BatchResponse with shortened URLs.
+//
+// HTTP methods: POST
+// Content-Type: application/json
+// Response: application/json with array of BatchResponse
+//
+// Example request:
+//
+//	[
+//	  {"correlation_id": "1", "original_url": "https://example.com"},
+//	  {"correlation_id": "2", "original_url": "https://google.com"}
+//	]
+//
+// Response codes:
+//   - 201: URLs successfully shortened
+//   - 400: Invalid request method, JSON, or empty array
+//   - 401: User not authorized
+//   - 500: Internal server error
 func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
@@ -217,7 +316,11 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 		http.Error(w, "Empty batch", http.StatusBadRequest)
 		return
 	}
+
 	batchResponses := make([]BatchResponse, 0, len(batchRequests))
+
+	urlsToSave := make(map[string]string, len(batchRequests))
+
 	for _, req := range batchRequests {
 		shortURL := generateShortURL()
 		err := storageInstance.AddURL(shortURL, req.OriginalURL, userID)
@@ -229,11 +332,15 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 			CorrelationID: req.CorrelationID,
 			ShortURL:      fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
 		})
+		urlsToSave[shortURL] = req.OriginalURL
 	}
-	if err := storage.SaveURLMappings(cfg.FileStorage, storageInstance.GetAllURLs()); err != nil {
-		http.Error(w, "Failed to save URL mappings", http.StatusInternalServerError)
-		return
+
+	if cfg.FileStorage != "" && len(urlsToSave) > 0 {
+		if err := storage.SaveURLMappings(cfg.FileStorage, urlsToSave); err != nil {
+			log.Printf("Warning: Failed to save URL mappings to file: %v", err)
+		}
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(batchResponses); err != nil {
@@ -242,6 +349,18 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 	}
 }
 
+// HandleGetUserURLs returns a handler for getting all URLs created by the authenticated user.
+// Requires user authentication via JWT token in cookies.
+//
+// HTTP methods: GET
+// Content-Type: application/json
+// Response: JSON array of user's URLs with short_url and original_url fields
+//
+// Response codes:
+//   - 200: URLs successfully retrieved
+//   - 204: User has no URLs
+//   - 401: User not authenticated
+//   - 500: Internal server error
 func HandleGetUserURLs(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
@@ -279,6 +398,16 @@ func HandleGetUserURLs(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
+// HandleDeleteUserURLs returns a handler for asynchronously deleting specified URLs.
+// Accepts a JSON array of short URL IDs and marks them for deletion.
+//
+// HTTP methods: DELETE
+// Content-Type: application/json
+// Request body: JSON array of short URL strings
+//
+// Response codes:
+//   - 202: Deletion request accepted (async operation)
+//   - 400: Invalid request method or JSON body
 func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -292,20 +421,15 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// Создаем канал для обработки удаления
 		deleteChan := make(chan error)
 
-		// Запускаем горутину для удаления
 		go func() {
-			// Удаление URL
 			err := storageInstance.DeleteURLs(shortURLs, "")
 			deleteChan <- err
 		}()
 
-		// Возвращаем статус 202 Accepted сразу
 		w.WriteHeader(http.StatusAccepted)
 
-		// Обработка результата удаления (можно логировать или обрабатывать по мере необходимости)
 		go func() {
 			err := <-deleteChan
 			if err != nil {

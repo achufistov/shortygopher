@@ -1,3 +1,4 @@
+// Package config provides functions for loading and managing application configuration.
 package config
 
 import (
@@ -16,14 +17,54 @@ var (
 	flagsDefined    = false
 )
 
+// Config contains all configuration parameters for the URL shortening service.
+// Configuration can be set via environment variables or command line flags.
+//
+// Setting priority (from highest to lowest):
+//  1. Environment variables
+//  2. Command line flags
+//  3. Default values
+//
+// Example usage:
+//
+//	cfg, err := config.LoadConfig()
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Printf("Server started on %s\n", cfg.Address)
 type Config struct {
-	Address     string
-	BaseURL     string
+	// Address defines the address and port for the HTTP server (e.g., "localhost:8080")
+	Address string
+
+	// BaseURL defines the base URL for generating shortened links
+	BaseURL string
+
+	// FileStorage defines the path to the file for persistent URL storage (can be empty)
 	FileStorage string
+
+	// DatabaseDSN contains the database connection string (can be empty)
 	DatabaseDSN string
-	SecretKey   string
+
+	// SecretKey contains the secret key for JWT token signing
+	SecretKey string
 }
 
+// LoadConfig loads configuration from environment variables and command line flags.
+// Returns a pointer to Config struct or an error if configuration loading fails.
+//
+// Supported environment variables:
+//   - SERVER_ADDRESS: server address
+//   - BASE_URL: base URL
+//   - FILE_STORAGE_PATH: storage file path
+//   - DATABASE_DSN: database connection string
+//   - JWT_SECRET_FILE: path to JWT secret file
+//
+// Supported flags:
+//   - -a: server address
+//   - -b: base URL
+//   - -f: storage file path
+//   - -d: database connection string
+//   - -jwt-secret-file: path to JWT secret file
 func LoadConfig() (*Config, error) {
 	if !flagsDefined {
 		flag.Parse()

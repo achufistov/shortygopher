@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -15,20 +16,31 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var (
-	cfg *config.Config
-)
+var cfg *config.Config
 
 func initConfig() {
-
-	var err error
-	cfg, err = config.LoadConfig()
+	// jwt for testing
+	err := os.MkdirAll("./secrets", 0755)
 	if err != nil {
 		panic(err)
 	}
+
+	secretFile := "./secrets/jwt_secret.key"
+	err = os.WriteFile(secretFile, []byte("test-jwt-secret-for-integration-tests"), 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+
+	var err2 error
+	cfg, err2 = config.LoadConfig()
+	if err2 != nil {
+		panic(err2)
+	}
 }
 
-// mockAuthMiddleware добавляет тестовый userID в контекст
+// mockAuthMiddleware adds test userID to the context
 
 func mockAuthMiddleware(next http.Handler) http.Handler {
 
@@ -99,7 +111,7 @@ func Test_handleGet(t *testing.T) {
 	shortURL := "abc123"
 	originalURL := "https://example.com"
 	userID := "test_user"
-	storageInstance.AddURL(shortURL, originalURL, userID) // Добавляем userID
+	storageInstance.AddURL(shortURL, originalURL, userID)
 	tests := []struct {
 		name           string
 		urlPath        string
