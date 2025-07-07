@@ -15,12 +15,16 @@ var gzipWriterPool = sync.Pool{
 	},
 }
 
+// gzipResponseWriter wraps http.ResponseWriter to provide gzip compression functionality.
+// Implements transparent compression for supported content types.
 type gzipResponseWriter struct {
 	http.ResponseWriter
 	gzWriter   *gzip.Writer
 	shouldGzip bool
 }
 
+// WriteHeader writes the HTTP status code and sets up gzip compression if needed.
+// Configures compression headers and initializes gzip writer from pool.
 func (w *gzipResponseWriter) WriteHeader(statusCode int) {
 	contentType := w.Header().Get("Content-Type")
 	if w.shouldGzip && shouldCompress(contentType) {
@@ -33,6 +37,8 @@ func (w *gzipResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
+// Write writes data to the response, compressing if gzip is enabled.
+// Routes data through gzip writer if compression is active.
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	if w.gzWriter != nil {
 		return w.gzWriter.Write(b)
@@ -40,6 +46,8 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Close closes the gzip writer and returns it to the pool for reuse.
+// Must be called to properly clean up resources and avoid memory leaks.
 func (w *gzipResponseWriter) Close() {
 	if w.gzWriter != nil {
 		w.gzWriter.Close()
@@ -50,6 +58,8 @@ func (w *gzipResponseWriter) Close() {
 	}
 }
 
+// shouldCompress determines if the given content type should be compressed.
+// Returns true for text and JSON content types that benefit from compression.
 func shouldCompress(contentType string) bool {
 	compressibleTypes := []string{
 		"text/plain",
@@ -68,6 +78,15 @@ func shouldCompress(contentType string) bool {
 	return false
 }
 
+// GzipMiddleware returns HTTP middleware that handles gzip compression for both requests and responses.
+// Automatically decompresses incoming gzip requests and compresses outgoing responses when supported.
+//
+// Features:
+//   - Decompresses incoming requests with Content-Encoding: gzip
+//   - Compresses responses for clients that Accept-Encoding: gzip
+//   - Uses sync.Pool for efficient gzip writer reuse
+//   - Supports text/plain, application/json, and other compressible content types
+//   - Handles application/x-gzip content type conversion
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// process incoming gzip
