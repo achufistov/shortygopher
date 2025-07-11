@@ -83,29 +83,33 @@ func TestAuthMiddleware_NewUser(t *testing.T) {
 	}
 
 	// Check if auth cookie was set
-	cookies := w.Result().Cookies()
-	var authCookie *http.Cookie
-	for _, cookie := range cookies {
-		if cookie.Name == "auth_token" {
-			authCookie = cookie
-			break
+	result := w.Result()
+	if result != nil {
+		defer result.Body.Close()
+		cookies := result.Cookies()
+		var authCookie *http.Cookie
+		for _, cookie := range cookies {
+			if cookie.Name == "auth_token" {
+				authCookie = cookie
+				break
+			}
 		}
-	}
 
-	if authCookie == nil {
-		t.Error("Expected auth_token cookie to be set")
-	}
+		if authCookie == nil {
+			t.Error("Expected auth_token cookie to be set")
+		} else {
+			if authCookie.Value == "" {
+				t.Error("Expected non-empty auth_token value")
+			}
 
-	if authCookie.Value == "" {
-		t.Error("Expected non-empty auth_token value")
-	}
+			if !authCookie.HttpOnly {
+				t.Error("Expected auth_token cookie to be HttpOnly")
+			}
 
-	if !authCookie.HttpOnly {
-		t.Error("Expected auth_token cookie to be HttpOnly")
-	}
-
-	if authCookie.MaxAge != 86400 {
-		t.Errorf("Expected MaxAge 86400, got %d", authCookie.MaxAge)
+			if authCookie.MaxAge != 86400 {
+				t.Errorf("Expected MaxAge 86400, got %d", authCookie.MaxAge)
+			}
+		}
 	}
 }
 
@@ -163,9 +167,13 @@ func TestAuthMiddleware_ExistingValidToken(t *testing.T) {
 	}
 
 	// Check that no new cookie was set (should use existing valid token)
-	cookies := w.Result().Cookies()
-	if len(cookies) > 0 {
-		t.Error("Expected no new cookies to be set for existing valid token")
+	result := w.Result()
+	if result != nil {
+		defer result.Body.Close()
+		cookies := result.Cookies()
+		if len(cookies) > 0 {
+			t.Error("Expected no new cookies to be set for existing valid token")
+		}
 	}
 }
 
@@ -227,17 +235,21 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	}
 
 	// Check if new auth cookie was set
-	cookies := w.Result().Cookies()
-	var authCookie *http.Cookie
-	for _, cookie := range cookies {
-		if cookie.Name == "auth_token" {
-			authCookie = cookie
-			break
+	result := w.Result()
+	if result != nil {
+		defer result.Body.Close()
+		cookies := result.Cookies()
+		var authCookie *http.Cookie
+		for _, cookie := range cookies {
+			if cookie.Name == "auth_token" {
+				authCookie = cookie
+				break
+			}
 		}
-	}
 
-	if authCookie == nil {
-		t.Error("Expected new auth_token cookie to be set for expired token")
+		if authCookie == nil {
+			t.Error("Expected new auth_token cookie to be set for expired token")
+		}
 	}
 }
 
@@ -274,17 +286,21 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	}
 
 	// Check if new auth cookie was set
-	cookies := w.Result().Cookies()
-	var authCookie *http.Cookie
-	for _, cookie := range cookies {
-		if cookie.Name == "auth_token" {
-			authCookie = cookie
-			break
+	result := w.Result()
+	if result != nil {
+		defer result.Body.Close()
+		cookies := result.Cookies()
+		var authCookie *http.Cookie
+		for _, cookie := range cookies {
+			if cookie.Name == "auth_token" {
+				authCookie = cookie
+				break
+			}
 		}
-	}
 
-	if authCookie == nil {
-		t.Error("Expected new auth_token cookie to be set for invalid token")
+		if authCookie == nil {
+			t.Error("Expected new auth_token cookie to be set for invalid token")
+		}
 	}
 }
 
