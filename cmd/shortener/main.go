@@ -22,24 +22,18 @@ var (
 )
 
 func printBuildInfo() {
-	version := buildVersion
-	if version == "" {
-		version = "N/A"
+	buildInfo := map[string]string{
+		"Build version": buildVersion,
+		"Build date":    buildDate,
+		"Build commit":  buildCommit,
 	}
 
-	date := buildDate
-	if date == "" {
-		date = "N/A"
+	for key, value := range buildInfo {
+		if value == "" {
+			value = "N/A"
+		}
+		fmt.Printf("%s: %s\n", key, value)
 	}
-
-	commit := buildCommit
-	if commit == "" {
-		commit = "N/A"
-	}
-
-	fmt.Printf("Build version: %s\n", version)
-	fmt.Printf("Build date: %s\n", date)
-	fmt.Printf("Build commit: %s\n", commit)
 }
 
 func initLogger() (*zap.Logger, error) {

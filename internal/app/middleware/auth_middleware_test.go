@@ -4,49 +4,15 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/achufistov/shortygopher.git/internal/app/config"
+	"github.com/achufistov/shortygopher.git/tests/testutils"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func createTestConfig(t *testing.T) *config.Config {
-	// Create temporary secret file
-	tempDir := t.TempDir()
-	secretFile := filepath.Join(tempDir, "secret.key")
-	secretContent := "test-secret-key-for-auth-middleware"
-
-	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test secret file: %v", err)
-	}
-
-	// Set environment variables
-	os.Setenv("SERVER_ADDRESS", "localhost:8080")
-	os.Setenv("BASE_URL", "http://localhost:8080")
-	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
-	os.Setenv("JWT_SECRET_FILE", secretFile)
-
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("BASE_URL")
-		os.Unsetenv("FILE_STORAGE_PATH")
-		os.Unsetenv("JWT_SECRET_FILE")
-	}()
-
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		t.Fatalf("Failed to load test config: %v", err)
-	}
-
-	return cfg
-}
-
 func TestAuthMiddleware_NewUser(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfig(t, "test-secret-key-for-auth-middleware")
 
 	// Create test handler that checks if userID is set in context
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +80,7 @@ func TestAuthMiddleware_NewUser(t *testing.T) {
 }
 
 func TestAuthMiddleware_ExistingValidToken(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfig(t, "test-secret-key-for-auth-middleware")
 
 	// Create a valid JWT token
 	testUserID := "test-user-123"
@@ -178,7 +144,7 @@ func TestAuthMiddleware_ExistingValidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_ExpiredToken(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfig(t, "test-secret-key-for-auth-middleware")
 
 	// Create an expired JWT token
 	testUserID := "test-user-123"
@@ -254,7 +220,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfig(t, "test-secret-key-for-auth-middleware")
 
 	// Create test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

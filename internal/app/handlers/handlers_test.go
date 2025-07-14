@@ -5,48 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
+	"github.com/achufistov/shortygopher.git/tests/testutils"
 	"github.com/go-chi/chi/v5"
 )
-
-func createTestConfig(t *testing.T) *config.Config {
-	// Create temporary secret file
-	tempDir := t.TempDir()
-	secretFile := filepath.Join(tempDir, "secret.key")
-	secretContent := "test-secret-key"
-
-	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test secret file: %v", err)
-	}
-
-	// Set environment variables
-	os.Setenv("SERVER_ADDRESS", "localhost:8080")
-	os.Setenv("BASE_URL", "http://localhost:8080")
-	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
-	os.Setenv("JWT_SECRET_FILE", secretFile)
-
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("BASE_URL")
-		os.Unsetenv("FILE_STORAGE_PATH")
-		os.Unsetenv("JWT_SECRET_FILE")
-	}()
-
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		t.Fatalf("Failed to load test config: %v", err)
-	}
-
-	return cfg
-}
 
 func TestGenerateShortURL(t *testing.T) {
 	shortURL1 := generateShortURL()
@@ -96,8 +62,8 @@ func TestInitStorage(t *testing.T) {
 	}
 }
 
-func TestHandlePost_Success(t *testing.T) {
-	cfg := createTestConfig(t)
+func TestHandlePost_WithValidURL_ReturnsCreatedStatus(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -120,7 +86,7 @@ func TestHandlePost_Success(t *testing.T) {
 }
 
 func TestHandlePost_InvalidMethod(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -135,7 +101,7 @@ func TestHandlePost_InvalidMethod(t *testing.T) {
 }
 
 func TestHandlePost_Unauthorized(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -152,7 +118,7 @@ func TestHandlePost_Unauthorized(t *testing.T) {
 }
 
 func TestHandlePost_InvalidContentType(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -170,7 +136,7 @@ func TestHandlePost_InvalidContentType(t *testing.T) {
 }
 
 func TestHandleShortenPost_Success(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -206,7 +172,7 @@ func TestHandleShortenPost_Success(t *testing.T) {
 }
 
 func TestHandleShortenPost_InvalidMethod(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 
 	req := httptest.NewRequest("GET", "/api/shorten", nil)
 	w := httptest.NewRecorder()
@@ -219,7 +185,7 @@ func TestHandleShortenPost_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleShortenPost_InvalidJSON(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -318,7 +284,7 @@ func TestHandleGet_DeletedURL(t *testing.T) {
 }
 
 func TestHandleBatchShortenPost_Success(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -361,7 +327,7 @@ func TestHandleBatchShortenPost_Success(t *testing.T) {
 }
 
 func TestHandleBatchShortenPost_EmptyBatch(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -418,7 +384,7 @@ func TestHandlePing_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleGetUserURLs_Unauthorized(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -436,7 +402,7 @@ func TestHandleGetUserURLs_Unauthorized(t *testing.T) {
 }
 
 func TestHandleGetUserURLs_NoURLs(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -456,7 +422,7 @@ func TestHandleGetUserURLs_NoURLs(t *testing.T) {
 }
 
 func TestHandleGetUserURLs_WithURLs(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
@@ -527,7 +493,7 @@ func TestHandleGetUserURLs_WithURLs(t *testing.T) {
 }
 
 func TestHandleDeleteUserURLs_InvalidMethod(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 
 	handler := HandleDeleteUserURLs(cfg)
 
@@ -542,7 +508,7 @@ func TestHandleDeleteUserURLs_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleDeleteUserURLs_InvalidJSON(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 
 	handler := HandleDeleteUserURLs(cfg)
 
@@ -557,7 +523,7 @@ func TestHandleDeleteUserURLs_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleDeleteUserURLs_ValidRequest(t *testing.T) {
-	cfg := createTestConfig(t)
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
 	InitStorage(testStorage)
 
