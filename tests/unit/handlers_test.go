@@ -56,7 +56,7 @@ func TestHandlePost_InvalidContentType(t *testing.T) {
 	}
 }
 
-func TestHandlePost_Success(t *testing.T) {
+func TestHandlePost_WithValidURL_ReturnsCreatedStatus(t *testing.T) {
 	cfg := &config.Config{
 		Address:     ":8080",
 		BaseURL:     "http://localhost:8080",

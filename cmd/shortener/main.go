@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
@@ -15,6 +15,27 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
+func printBuildInfo() {
+	buildInfo := map[string]string{
+		"Build version": buildVersion,
+		"Build date":    buildDate,
+		"Build commit":  buildCommit,
+	}
+
+	for key, value := range buildInfo {
+		if value == "" {
+			value = "N/A"
+		}
+		fmt.Printf("%s: %s\n", key, value)
+	}
+}
+
 func initLogger() (*zap.Logger, error) {
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -24,6 +45,8 @@ func initLogger() (*zap.Logger, error) {
 }
 
 func main() {
+	printBuildInfo()
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
@@ -33,19 +56,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing logger: %v", err)
 	}
-	defer logger.Sync()
+	defer func() {
+		if syncErr := logger.Sync(); syncErr != nil {
+			log.Printf("Error syncing logger: %v", syncErr)
+		}
+	}()
 
 	var storageInstance storage.Storage
 	if cfg.DatabaseDSN != "" {
-		dbStorage, err := storage.NewDBStorage(cfg.DatabaseDSN)
-		if err != nil {
-			log.Printf("Error initializing database storage: %v", err)
+		dbStorage, dbErr := storage.NewDBStorage(cfg.DatabaseDSN)
+		if dbErr != nil {
+			log.Printf("Error initializing database storage: %v", dbErr)
 			if dbStorage != nil {
-				dbStorage.Close()
+				if closeErr := dbStorage.Close(); closeErr != nil {
+					log.Printf("Error closing database storage: %v", closeErr)
+				}
 			}
-			os.Exit(1)
+			log.Fatalf("Failed to initialize database storage: %v", dbErr)
 		}
-		defer dbStorage.Close()
+		defer func() {
+			if closeErr := dbStorage.Close(); closeErr != nil {
+				log.Printf("Error closing database storage: %v", closeErr)
+			}
+		}()
 		storageInstance = dbStorage
 	} else {
 		log.Println("Database DSN is empty, using in-memory storage")
@@ -57,9 +90,8 @@ func main() {
 		log.Printf("Error loading URL mappings: %v", err)
 	} else {
 		for shortURL, originalURL := range urlMappings {
-			err := storageInstance.AddURL(shortURL, originalURL, "system")
-			if err != nil {
-				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, err)
+			if addErr := storageInstance.AddURL(shortURL, originalURL, "system"); addErr != nil {
+				log.Printf("Error adding URL mapping (short: %s, original: %s): %v", shortURL, originalURL, addErr)
 			}
 		}
 	}
