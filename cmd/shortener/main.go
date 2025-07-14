@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -14,6 +15,27 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
+func printBuildInfo() {
+	buildInfo := map[string]string{
+		"Build version": buildVersion,
+		"Build date":    buildDate,
+		"Build commit":  buildCommit,
+	}
+
+	for key, value := range buildInfo {
+		if value == "" {
+			value = "N/A"
+		}
+		fmt.Printf("%s: %s\n", key, value)
+	}
+}
+
 func initLogger() (*zap.Logger, error) {
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -23,6 +45,8 @@ func initLogger() (*zap.Logger, error) {
 }
 
 func main() {
+	printBuildInfo()
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)
