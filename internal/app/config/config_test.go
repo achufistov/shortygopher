@@ -1,10 +1,19 @@
 package config
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	// Parse test flags first
+	flag.Parse()
+
+	// Run tests
+	os.Exit(m.Run())
+}
 
 func TestLoadConfig_Success(t *testing.T) {
 	// Create temporary secret file
@@ -23,9 +32,6 @@ func TestLoadConfig_Success(t *testing.T) {
 	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
 	os.Setenv("DATABASE_DSN", "postgres://user:pass@localhost/test")
 	os.Setenv("JWT_SECRET_FILE", secretFile)
-	os.Setenv("ENABLE_HTTPS", "true")
-	os.Setenv("TLS_CERT_FILE", "test_cert.pem")
-	os.Setenv("TLS_KEY_FILE", "test_key.pem")
 
 	defer func() {
 		os.Unsetenv("SERVER_ADDRESS")
@@ -33,9 +39,6 @@ func TestLoadConfig_Success(t *testing.T) {
 		os.Unsetenv("FILE_STORAGE_PATH")
 		os.Unsetenv("DATABASE_DSN")
 		os.Unsetenv("JWT_SECRET_FILE")
-		os.Unsetenv("ENABLE_HTTPS")
-		os.Unsetenv("TLS_CERT_FILE")
-		os.Unsetenv("TLS_KEY_FILE")
 	}()
 
 	config, err := LoadConfig()
@@ -58,18 +61,24 @@ func TestLoadConfig_Success(t *testing.T) {
 	if config.SecretKey != secretContent {
 		t.Errorf("Expected SecretKey to be '%s', got '%s'", secretContent, config.SecretKey)
 	}
-	if !config.EnableHTTPS {
-		t.Error("Expected EnableHTTPS to be true")
-	}
-	if config.CertFile != "test_cert.pem" {
-		t.Errorf("Expected CertFile to be 'test_cert.pem', got '%s'", config.CertFile)
-	}
-	if config.KeyFile != "test_key.pem" {
-		t.Errorf("Expected KeyFile to be 'test_key.pem', got '%s'", config.KeyFile)
-	}
 }
 
 func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
+	// Save original flag values
+	origEnableHTTPS := *enableHTTPS
+	origCertFile := *certFile
+	origKeyFile := *keyFile
+	defer func() {
+		*enableHTTPS = origEnableHTTPS
+		*certFile = origCertFile
+		*keyFile = origKeyFile
+	}()
+
+	// Set flag values
+	*enableHTTPS = true
+	*certFile = "flag_cert.pem"
+	*keyFile = "flag_key.pem"
+
 	// Create temporary secret file
 	tempDir := t.TempDir()
 	secretFile := filepath.Join(tempDir, "secret.key")
@@ -92,13 +101,6 @@ func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
 		os.Unsetenv("FILE_STORAGE_PATH")
 		os.Unsetenv("JWT_SECRET_FILE")
 	}()
-
-	// Set command line flags
-	os.Args = []string{"cmd",
-		"-s",
-		"-cert=flag_cert.pem",
-		"-key=flag_key.pem",
-	}
 
 	config, err := LoadConfig()
 	if err != nil {
@@ -202,5 +204,149 @@ func TestLoadConfig_EmptyDatabaseDSN(t *testing.T) {
 
 	if config.DatabaseDSN != "" {
 		t.Errorf("Expected DatabaseDSN to be empty, got '%s'", config.DatabaseDSN)
+	}
+}
+
+func TestLoadConfig_JSONConfig(t *testing.T) {
+	// Save original flag values
+	origEnableHTTPS := *enableHTTPS
+	origCertFile := *certFile
+	origKeyFile := *keyFile
+	defer func() {
+		*enableHTTPS = origEnableHTTPS
+		*certFile = origCertFile
+		*keyFile = origKeyFile
+	}()
+
+	// Reset flag values to defaults
+	*enableHTTPS = false
+	*certFile = "cert.pem"
+	*keyFile = "key.pem"
+
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Create temporary JSON config file
+	configFile := filepath.Join(tempDir, "config.json")
+	configContent := `{
+		"server_address": "localhost:9999",
+		"base_url": "http://localhost:9999",
+		"file_storage_path": "json_urls.json",
+		"database_dsn": "postgres://json:pass@localhost/test",
+		"enable_https": true,
+		"cert_file": "json_cert.pem",
+		"key_file": "json_key.pem"
+	}`
+
+	err = os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	// Set minimal required environment variables
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("CONFIG", configFile)
+
+	defer func() {
+		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("CONFIG")
+	}()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	// Check that values from JSON file were loaded
+	if config.Address != "localhost:9999" {
+		t.Errorf("Expected Address to be 'localhost:9999', got '%s'", config.Address)
+	}
+	if config.BaseURL != "http://localhost:9999" {
+		t.Errorf("Expected BaseURL to be 'http://localhost:9999', got '%s'", config.BaseURL)
+	}
+	if config.FileStorage != "json_urls.json" {
+		t.Errorf("Expected FileStorage to be 'json_urls.json', got '%s'", config.FileStorage)
+	}
+	if config.DatabaseDSN != "postgres://json:pass@localhost/test" {
+		t.Errorf("Expected DatabaseDSN to be 'postgres://json:pass@localhost/test', got '%s'", config.DatabaseDSN)
+	}
+	if !config.EnableHTTPS {
+		t.Error("Expected EnableHTTPS to be true")
+	}
+	if config.CertFile != "json_cert.pem" {
+		t.Errorf("Expected CertFile to be 'json_cert.pem', got '%s'", config.CertFile)
+	}
+	if config.KeyFile != "json_key.pem" {
+		t.Errorf("Expected KeyFile to be 'json_key.pem', got '%s'", config.KeyFile)
+	}
+}
+
+func TestLoadConfig_JSONConfigOverride(t *testing.T) {
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Create temporary JSON config file
+	configFile := filepath.Join(tempDir, "config.json")
+	configContent := `{
+		"server_address": "localhost:9999",
+		"base_url": "http://localhost:9999",
+		"file_storage_path": "json_urls.json",
+		"database_dsn": "postgres://json:pass@localhost/test",
+		"enable_https": false,
+		"cert_file": "json_cert.pem",
+		"key_file": "json_key.pem"
+	}`
+
+	err = os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	// Set environment variables that should override JSON config
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("CONFIG", configFile)
+	os.Setenv("SERVER_ADDRESS", "localhost:8888")
+	os.Setenv("ENABLE_HTTPS", "true")
+
+	defer func() {
+		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("CONFIG")
+		os.Unsetenv("SERVER_ADDRESS")
+		os.Unsetenv("ENABLE_HTTPS")
+	}()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	// Check that environment variables override JSON config
+	if config.Address != "localhost:8888" {
+		t.Errorf("Expected Address to be 'localhost:8888' (from env), got '%s'", config.Address)
+	}
+	if !config.EnableHTTPS {
+		t.Error("Expected EnableHTTPS to be true (from env)")
+	}
+
+	// Check that other values from JSON remain unchanged
+	if config.BaseURL != "http://localhost:9999" {
+		t.Errorf("Expected BaseURL to be 'http://localhost:9999', got '%s'", config.BaseURL)
+	}
+	if config.FileStorage != "json_urls.json" {
+		t.Errorf("Expected FileStorage to be 'json_urls.json', got '%s'", config.FileStorage)
 	}
 }

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -14,16 +15,20 @@ var (
 	fileStoragePath = flag.String("f", "urls.json", "File for storing urls")
 	databaseDSNFlag = flag.String("d", "", "Database connection string")
 	jwtSecretFile   = flag.String("jwt-secret-file", "secret.key", "Path to JWT secret file")
-	flagsDefined    = false
+	configFile      = flag.String("c", "", "Path to JSON configuration file (can also use -config)")
+	enableHTTPS     = flag.Bool("s", false, "Enable HTTPS server")
+	certFile        = flag.String("cert", "cert.pem", "Path to TLS certificate file")
+	keyFile         = flag.String("key", "key.pem", "Path to TLS private key file")
 )
 
 // Config contains all configuration parameters for the URL shortening service.
-// Configuration can be set via environment variables or command line flags.
+// Configuration can be set via environment variables, command line flags, or JSON config file.
 //
 // Setting priority (from highest to lowest):
 //  1. Environment variables
 //  2. Command line flags
-//  3. Default values
+//  3. JSON config file
+//  4. Default values
 //
 // Example usage:
 //
@@ -34,31 +39,31 @@ var (
 //	fmt.Printf("Server started on %s\n", cfg.Address)
 type Config struct {
 	// Address defines the address and port for the HTTP server (e.g., "localhost:8080")
-	Address string
+	Address string `json:"server_address"`
 
 	// BaseURL defines the base URL for generating shortened links
-	BaseURL string
+	BaseURL string `json:"base_url"`
 
 	// FileStorage defines the path to the file for persistent URL storage (can be empty)
-	FileStorage string
+	FileStorage string `json:"file_storage_path"`
 
 	// DatabaseDSN contains the database connection string (can be empty)
-	DatabaseDSN string
+	DatabaseDSN string `json:"database_dsn"`
 
 	// SecretKey contains the secret key for JWT token signing
-	SecretKey string
+	SecretKey string `json:"-"`
 
 	// EnableHTTPS indicates whether to enable HTTPS server
-	EnableHTTPS bool
+	EnableHTTPS bool `json:"enable_https"`
 
 	// CertFile is the path to the TLS certificate file
-	CertFile string
+	CertFile string `json:"cert_file"`
 
 	// KeyFile is the path to the TLS private key file
-	KeyFile string
+	KeyFile string `json:"key_file"`
 }
 
-// LoadConfig loads configuration from environment variables and command line flags.
+// LoadConfig loads configuration from environment variables, command line flags, and JSON config file.
 // Returns a pointer to Config struct or an error if configuration loading fails.
 //
 // Supported environment variables:
@@ -70,6 +75,7 @@ type Config struct {
 //   - ENABLE_HTTPS: enable HTTPS server (true/false)
 //   - TLS_CERT_FILE: path to TLS certificate file
 //   - TLS_KEY_FILE: path to TLS private key file
+//   - CONFIG: path to JSON configuration file
 //
 // Supported flags:
 //   - -a: server address
@@ -80,33 +86,68 @@ type Config struct {
 //   - -s: enable HTTPS server
 //   - -cert: path to TLS certificate file
 //   - -key: path to TLS private key file
+//   - -c, -config: path to JSON configuration file
 func LoadConfig() (*Config, error) {
-	if !flagsDefined {
-		flag.Bool("s", false, "Enable HTTPS server")
-		flag.String("cert", "cert.pem", "Path to TLS certificate file")
-		flag.String("key", "key.pem", "Path to TLS private key file")
-		flag.Parse()
-		flagsDefined = true
+	// Initialize config with default values
+	config := &Config{
+		Address:     *addressFlag,
+		BaseURL:     *baseURLFlag,
+		FileStorage: *fileStoragePath,
+		CertFile:    *certFile,
+		KeyFile:     *keyFile,
+		EnableHTTPS: *enableHTTPS,
 	}
 
-	address := os.Getenv("SERVER_ADDRESS")
-	baseURL := os.Getenv("BASE_URL")
-	fileStorage := os.Getenv("FILE_STORAGE_PATH")
-	databaseDSN := os.Getenv("DATABASE_DSN")
-
-	if address == "" {
-		address = *addressFlag
-	}
-	if baseURL == "" {
-		baseURL = *baseURLFlag
-	}
-	if fileStorage == "" {
-		fileStorage = *fileStoragePath
-	}
-	if databaseDSN == "" {
-		databaseDSN = *databaseDSNFlag
+	// Load from JSON config file if specified
+	configPath := os.Getenv("CONFIG")
+	if configPath == "" {
+		if *configFile != "" {
+			configPath = *configFile
+		}
 	}
 
+	if configPath != "" {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read config file: %v", err)
+		}
+
+		if err := json.Unmarshal(data, config); err != nil {
+			return nil, fmt.Errorf("failed to parse config file: %v", err)
+		}
+	}
+
+	// Override with command line flags
+	if *enableHTTPS {
+		config.EnableHTTPS = true
+		config.CertFile = *certFile
+		config.KeyFile = *keyFile
+	}
+
+	// Override with environment variables
+	if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
+		config.Address = envAddr
+	}
+	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
+		config.BaseURL = envBaseURL
+	}
+	if envFileStorage := os.Getenv("FILE_STORAGE_PATH"); envFileStorage != "" {
+		config.FileStorage = envFileStorage
+	}
+	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
+		config.DatabaseDSN = envDSN
+	}
+	if os.Getenv("ENABLE_HTTPS") == "true" {
+		config.EnableHTTPS = true
+	}
+	if envCertFile := os.Getenv("TLS_CERT_FILE"); envCertFile != "" {
+		config.CertFile = envCertFile
+	}
+	if envKeyFile := os.Getenv("TLS_KEY_FILE"); envKeyFile != "" {
+		config.KeyFile = envKeyFile
+	}
+
+	// Load JWT secret
 	secretFile := os.Getenv("JWT_SECRET_FILE")
 	if secretFile == "" {
 		secretFile = *jwtSecretFile
@@ -116,41 +157,12 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read JWT secret file: %v", err)
 	}
-	secretKey := strings.TrimSpace(string(secretKeyBytes))
+	config.SecretKey = strings.TrimSpace(string(secretKeyBytes))
 
-	if address == "" || baseURL == "" || fileStorage == "" {
+	// Validate required fields
+	if config.Address == "" || config.BaseURL == "" || config.FileStorage == "" {
 		return nil, fmt.Errorf("address, base URL, file storage path must be provided")
 	}
 
-	// Handle HTTPS configuration
-	enableHTTPS := false
-	if os.Getenv("ENABLE_HTTPS") == "true" {
-		enableHTTPS = true
-	} else {
-		enableHTTPSFlag := flag.Lookup("s")
-		if enableHTTPSFlag != nil {
-			enableHTTPS = enableHTTPSFlag.Value.(flag.Getter).Get().(bool)
-		}
-	}
-
-	certFile := os.Getenv("TLS_CERT_FILE")
-	if certFile == "" {
-		certFile = flag.Lookup("cert").Value.String()
-	}
-
-	keyFile := os.Getenv("TLS_KEY_FILE")
-	if keyFile == "" {
-		keyFile = flag.Lookup("key").Value.String()
-	}
-
-	return &Config{
-		Address:     address,
-		BaseURL:     baseURL,
-		FileStorage: fileStorage,
-		DatabaseDSN: databaseDSN,
-		SecretKey:   secretKey,
-		EnableHTTPS: enableHTTPS,
-		CertFile:    certFile,
-		KeyFile:     keyFile,
-	}, nil
+	return config, nil
 }
