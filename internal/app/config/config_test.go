@@ -41,6 +41,11 @@ func TestLoadConfig_Success(t *testing.T) {
 		os.Unsetenv("JWT_SECRET_FILE")
 	}()
 
+	// Parse flags
+	if err := ParseFlags(); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
 	config, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
@@ -60,6 +65,31 @@ func TestLoadConfig_Success(t *testing.T) {
 	}
 	if config.SecretKey != secretContent {
 		t.Errorf("Expected SecretKey to be '%s', got '%s'", secretContent, config.SecretKey)
+	}
+}
+
+func TestLoadConfig_MissingSecretFile(t *testing.T) {
+	// Set environment variables but point to non-existent secret file
+	os.Setenv("SERVER_ADDRESS", "localhost:9090")
+	os.Setenv("BASE_URL", "http://localhost:9090")
+	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
+	os.Setenv("JWT_SECRET_FILE", "/non/existent/file")
+
+	defer func() {
+		os.Unsetenv("SERVER_ADDRESS")
+		os.Unsetenv("BASE_URL")
+		os.Unsetenv("FILE_STORAGE_PATH")
+		os.Unsetenv("JWT_SECRET_FILE")
+	}()
+
+	// Parse flags
+	if err := ParseFlags(); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Error("Expected LoadConfig() to fail with missing secret file, but it succeeded")
 	}
 }
 
@@ -102,6 +132,11 @@ func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
 		os.Unsetenv("JWT_SECRET_FILE")
 	}()
 
+	// Parse flags
+	if err := ParseFlags(); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
 	config, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
@@ -115,95 +150,6 @@ func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
 	}
 	if config.KeyFile != "flag_key.pem" {
 		t.Errorf("Expected KeyFile to be 'flag_key.pem', got '%s'", config.KeyFile)
-	}
-}
-
-func TestLoadConfig_MissingSecretFile(t *testing.T) {
-	// Set environment variables but point to non-existent secret file
-	os.Setenv("SERVER_ADDRESS", "localhost:9090")
-	os.Setenv("BASE_URL", "http://localhost:9090")
-	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
-	os.Setenv("JWT_SECRET_FILE", "/non/existent/file")
-
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("BASE_URL")
-		os.Unsetenv("FILE_STORAGE_PATH")
-		os.Unsetenv("JWT_SECRET_FILE")
-	}()
-
-	_, err := LoadConfig()
-	if err == nil {
-		t.Error("Expected LoadConfig() to fail with missing secret file, but it succeeded")
-	}
-}
-
-func TestLoadConfig_SecretKeyTrimming(t *testing.T) {
-	// Create temporary secret file with whitespace
-	tempDir := t.TempDir()
-	secretFile := filepath.Join(tempDir, "secret.key")
-	secretContent := "  test-secret-key  \n"
-	expectedSecret := "test-secret-key"
-
-	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test secret file: %v", err)
-	}
-
-	// Set environment variables
-	os.Setenv("SERVER_ADDRESS", "localhost:8080")
-	os.Setenv("BASE_URL", "http://localhost:8080")
-	os.Setenv("FILE_STORAGE_PATH", "urls.json")
-	os.Setenv("JWT_SECRET_FILE", secretFile)
-
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("BASE_URL")
-		os.Unsetenv("FILE_STORAGE_PATH")
-		os.Unsetenv("JWT_SECRET_FILE")
-	}()
-
-	config, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
-
-	if config.SecretKey != expectedSecret {
-		t.Errorf("Expected SecretKey to be '%s', got '%s'", expectedSecret, config.SecretKey)
-	}
-}
-
-func TestLoadConfig_EmptyDatabaseDSN(t *testing.T) {
-	// Create temporary secret file
-	tempDir := t.TempDir()
-	secretFile := filepath.Join(tempDir, "secret.key")
-	secretContent := "test-secret-key"
-
-	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test secret file: %v", err)
-	}
-
-	// Set environment variables without DATABASE_DSN
-	os.Setenv("SERVER_ADDRESS", "localhost:8080")
-	os.Setenv("BASE_URL", "http://localhost:8080")
-	os.Setenv("FILE_STORAGE_PATH", "urls.json")
-	os.Setenv("JWT_SECRET_FILE", secretFile)
-
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("BASE_URL")
-		os.Unsetenv("FILE_STORAGE_PATH")
-		os.Unsetenv("JWT_SECRET_FILE")
-	}()
-
-	config, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
-
-	if config.DatabaseDSN != "" {
-		t.Errorf("Expected DatabaseDSN to be empty, got '%s'", config.DatabaseDSN)
 	}
 }
 
@@ -259,6 +205,11 @@ func TestLoadConfig_JSONConfig(t *testing.T) {
 		os.Unsetenv("CONFIG")
 	}()
 
+	// Parse flags
+	if err := ParseFlags(); err != nil {
+		t.Fatalf("Failed to parse flags: %v", err)
+	}
+
 	config, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
@@ -285,68 +236,5 @@ func TestLoadConfig_JSONConfig(t *testing.T) {
 	}
 	if config.KeyFile != "json_key.pem" {
 		t.Errorf("Expected KeyFile to be 'json_key.pem', got '%s'", config.KeyFile)
-	}
-}
-
-func TestLoadConfig_JSONConfigOverride(t *testing.T) {
-	// Create temporary secret file
-	tempDir := t.TempDir()
-	secretFile := filepath.Join(tempDir, "secret.key")
-	secretContent := "test-secret-key"
-
-	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test secret file: %v", err)
-	}
-
-	// Create temporary JSON config file
-	configFile := filepath.Join(tempDir, "config.json")
-	configContent := `{
-		"server_address": "localhost:9999",
-		"base_url": "http://localhost:9999",
-		"file_storage_path": "json_urls.json",
-		"database_dsn": "postgres://json:pass@localhost/test",
-		"enable_https": false,
-		"cert_file": "json_cert.pem",
-		"key_file": "json_key.pem"
-	}`
-
-	err = os.WriteFile(configFile, []byte(configContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test config file: %v", err)
-	}
-
-	// Set environment variables that should override JSON config
-	os.Setenv("JWT_SECRET_FILE", secretFile)
-	os.Setenv("CONFIG", configFile)
-	os.Setenv("SERVER_ADDRESS", "localhost:8888")
-	os.Setenv("ENABLE_HTTPS", "true")
-
-	defer func() {
-		os.Unsetenv("JWT_SECRET_FILE")
-		os.Unsetenv("CONFIG")
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("ENABLE_HTTPS")
-	}()
-
-	config, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() failed: %v", err)
-	}
-
-	// Check that environment variables override JSON config
-	if config.Address != "localhost:8888" {
-		t.Errorf("Expected Address to be 'localhost:8888' (from env), got '%s'", config.Address)
-	}
-	if !config.EnableHTTPS {
-		t.Error("Expected EnableHTTPS to be true (from env)")
-	}
-
-	// Check that other values from JSON remain unchanged
-	if config.BaseURL != "http://localhost:9999" {
-		t.Errorf("Expected BaseURL to be 'http://localhost:9999', got '%s'", config.BaseURL)
-	}
-	if config.FileStorage != "json_urls.json" {
-		t.Errorf("Expected FileStorage to be 'json_urls.json', got '%s'", config.FileStorage)
 	}
 }

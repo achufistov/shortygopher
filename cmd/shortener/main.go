@@ -47,6 +47,11 @@ func initLogger() (*zap.Logger, error) {
 func main() {
 	printBuildInfo()
 
+	// Parse command line flags
+	if err := config.ParseFlags(); err != nil {
+		log.Fatalf("Error parsing flags: %v", err)
+	}
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading config: %v", err)

@@ -21,6 +21,15 @@ var (
 	keyFile         = flag.String("key", "key.pem", "Path to TLS private key file")
 )
 
+// ParseFlags parses command line flags.
+// This function should be called before LoadConfig to ensure all flags are properly initialized.
+func ParseFlags() error {
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+	return nil
+}
+
 // Config contains all configuration parameters for the URL shortening service.
 // Configuration can be set via environment variables, command line flags, or JSON config file.
 //
