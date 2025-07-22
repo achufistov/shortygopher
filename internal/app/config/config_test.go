@@ -23,6 +23,9 @@ func TestLoadConfig_Success(t *testing.T) {
 	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
 	os.Setenv("DATABASE_DSN", "postgres://user:pass@localhost/test")
 	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("ENABLE_HTTPS", "true")
+	os.Setenv("TLS_CERT_FILE", "test_cert.pem")
+	os.Setenv("TLS_KEY_FILE", "test_key.pem")
 
 	defer func() {
 		os.Unsetenv("SERVER_ADDRESS")
@@ -30,6 +33,9 @@ func TestLoadConfig_Success(t *testing.T) {
 		os.Unsetenv("FILE_STORAGE_PATH")
 		os.Unsetenv("DATABASE_DSN")
 		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("ENABLE_HTTPS")
+		os.Unsetenv("TLS_CERT_FILE")
+		os.Unsetenv("TLS_KEY_FILE")
 	}()
 
 	config, err := LoadConfig()
@@ -51,6 +57,62 @@ func TestLoadConfig_Success(t *testing.T) {
 	}
 	if config.SecretKey != secretContent {
 		t.Errorf("Expected SecretKey to be '%s', got '%s'", secretContent, config.SecretKey)
+	}
+	if !config.EnableHTTPS {
+		t.Error("Expected EnableHTTPS to be true")
+	}
+	if config.CertFile != "test_cert.pem" {
+		t.Errorf("Expected CertFile to be 'test_cert.pem', got '%s'", config.CertFile)
+	}
+	if config.KeyFile != "test_key.pem" {
+		t.Errorf("Expected KeyFile to be 'test_key.pem', got '%s'", config.KeyFile)
+	}
+}
+
+func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Set required environment variables
+	os.Setenv("SERVER_ADDRESS", "localhost:9090")
+	os.Setenv("BASE_URL", "http://localhost:9090")
+	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+
+	defer func() {
+		os.Unsetenv("SERVER_ADDRESS")
+		os.Unsetenv("BASE_URL")
+		os.Unsetenv("FILE_STORAGE_PATH")
+		os.Unsetenv("JWT_SECRET_FILE")
+	}()
+
+	// Set command line flags
+	os.Args = []string{"cmd",
+		"-s",
+		"-cert=flag_cert.pem",
+		"-key=flag_key.pem",
+	}
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	if !config.EnableHTTPS {
+		t.Error("Expected EnableHTTPS to be true when -s flag is set")
+	}
+	if config.CertFile != "flag_cert.pem" {
+		t.Errorf("Expected CertFile to be 'flag_cert.pem', got '%s'", config.CertFile)
+	}
+	if config.KeyFile != "flag_key.pem" {
+		t.Errorf("Expected KeyFile to be 'flag_key.pem', got '%s'", config.KeyFile)
 	}
 }
 

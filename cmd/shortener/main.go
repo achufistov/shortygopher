@@ -121,5 +121,11 @@ func main() {
 	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
 	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
 	log.Printf("Server is running on %s", cfg.Address)
-	log.Fatal(http.ListenAndServe(cfg.Address, r))
+
+	if cfg.EnableHTTPS {
+		log.Printf("HTTPS enabled, using certificate: %s and key: %s", cfg.CertFile, cfg.KeyFile)
+		log.Fatal(http.ListenAndServeTLS(cfg.Address, cfg.CertFile, cfg.KeyFile, r))
+	} else {
+		log.Fatal(http.ListenAndServe(cfg.Address, r))
+	}
 }

@@ -47,6 +47,15 @@ type Config struct {
 
 	// SecretKey contains the secret key for JWT token signing
 	SecretKey string
+
+	// EnableHTTPS indicates whether to enable HTTPS server
+	EnableHTTPS bool
+
+	// CertFile is the path to the TLS certificate file
+	CertFile string
+
+	// KeyFile is the path to the TLS private key file
+	KeyFile string
 }
 
 // LoadConfig loads configuration from environment variables and command line flags.
@@ -58,6 +67,9 @@ type Config struct {
 //   - FILE_STORAGE_PATH: storage file path
 //   - DATABASE_DSN: database connection string
 //   - JWT_SECRET_FILE: path to JWT secret file
+//   - ENABLE_HTTPS: enable HTTPS server (true/false)
+//   - TLS_CERT_FILE: path to TLS certificate file
+//   - TLS_KEY_FILE: path to TLS private key file
 //
 // Supported flags:
 //   - -a: server address
@@ -65,8 +77,14 @@ type Config struct {
 //   - -f: storage file path
 //   - -d: database connection string
 //   - -jwt-secret-file: path to JWT secret file
+//   - -s: enable HTTPS server
+//   - -cert: path to TLS certificate file
+//   - -key: path to TLS private key file
 func LoadConfig() (*Config, error) {
 	if !flagsDefined {
+		flag.Bool("s", false, "Enable HTTPS server")
+		flag.String("cert", "cert.pem", "Path to TLS certificate file")
+		flag.String("key", "key.pem", "Path to TLS private key file")
 		flag.Parse()
 		flagsDefined = true
 	}
@@ -104,11 +122,35 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("address, base URL, file storage path must be provided")
 	}
 
+	// Handle HTTPS configuration
+	enableHTTPS := false
+	if os.Getenv("ENABLE_HTTPS") == "true" {
+		enableHTTPS = true
+	} else {
+		enableHTTPSFlag := flag.Lookup("s")
+		if enableHTTPSFlag != nil {
+			enableHTTPS = enableHTTPSFlag.Value.(flag.Getter).Get().(bool)
+		}
+	}
+
+	certFile := os.Getenv("TLS_CERT_FILE")
+	if certFile == "" {
+		certFile = flag.Lookup("cert").Value.String()
+	}
+
+	keyFile := os.Getenv("TLS_KEY_FILE")
+	if keyFile == "" {
+		keyFile = flag.Lookup("key").Value.String()
+	}
+
 	return &Config{
 		Address:     address,
 		BaseURL:     baseURL,
 		FileStorage: fileStorage,
 		DatabaseDSN: databaseDSN,
 		SecretKey:   secretKey,
+		EnableHTTPS: enableHTTPS,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
 	}, nil
 }
