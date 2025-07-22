@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -51,6 +52,9 @@ func initLogger() (*zap.Logger, error) {
 
 func main() {
 	printBuildInfo()
+
+	// Parse command line flags
+	flag.Parse()
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
