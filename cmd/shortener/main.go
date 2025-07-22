@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
@@ -120,12 +125,72 @@ func main() {
 	r.Get("/ping", handlers.HandlePing(storageInstance))
 	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
 	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
-	log.Printf("Server is running on %s", cfg.Address)
 
-	if cfg.EnableHTTPS {
-		log.Printf("HTTPS enabled, using certificate: %s and key: %s", cfg.CertFile, cfg.KeyFile)
-		log.Fatal(http.ListenAndServeTLS(cfg.Address, cfg.CertFile, cfg.KeyFile, r))
-	} else {
-		log.Fatal(http.ListenAndServe(cfg.Address, r))
+	// Create server with timeouts
+	srv := &http.Server{
+		Addr:         cfg.Address,
+		Handler:      r,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	// Channel to listen for errors coming from the listener.
+	serverErrors := make(chan error, 1)
+
+	// Start the server in a goroutine
+	go func() {
+		log.Printf("Server is running on %s", cfg.Address)
+		if cfg.EnableHTTPS {
+			log.Printf("HTTPS enabled, using certificate: %s and key: %s", cfg.CertFile, cfg.KeyFile)
+			serverErrors <- srv.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+		} else {
+			serverErrors <- srv.ListenAndServe()
+		}
+	}()
+
+	// Channel to listen for an interrupt or terminate signal from the OS.
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+
+	// Blocking select waiting for either a signal or an error
+	select {
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	case sig := <-shutdown:
+		log.Printf("Start shutdown. Signal: %v", sig)
+
+		// Give outstanding requests a deadline for completion
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Trigger graceful shutdown
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			log.Printf("Error during server shutdown: %v", err)
+
+			// If shutdown times out, force close
+			err = srv.Close()
+			if err != nil {
+				log.Printf("Error closing server: %v", err)
+			}
+		}
+
+		// If using file storage, ensure all data is saved
+		if cfg.FileStorage != "" {
+			// Get all URLs from storage
+			urlMap := storageInstance.GetAllURLs()
+
+			// Save to file
+			if err := storage.SaveURLMappings(cfg.FileStorage, urlMap); err != nil {
+				log.Printf("Error saving URL mappings during shutdown: %v", err)
+			} else {
+				log.Printf("Successfully saved %d URL mappings to file", len(urlMap))
+			}
+		}
+
+		log.Println("Server shutdown completed")
 	}
 }
