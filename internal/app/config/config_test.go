@@ -41,11 +41,6 @@ func TestLoadConfig_Success(t *testing.T) {
 		os.Unsetenv("JWT_SECRET_FILE")
 	}()
 
-	// Parse flags
-	if err := ParseFlags(); err != nil {
-		t.Fatalf("Failed to parse flags: %v", err)
-	}
-
 	config, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
@@ -82,11 +77,6 @@ func TestLoadConfig_MissingSecretFile(t *testing.T) {
 		os.Unsetenv("JWT_SECRET_FILE")
 	}()
 
-	// Parse flags
-	if err := ParseFlags(); err != nil {
-		t.Fatalf("Failed to parse flags: %v", err)
-	}
-
 	_, err := LoadConfig()
 	if err == nil {
 		t.Error("Expected LoadConfig() to fail with missing secret file, but it succeeded")
@@ -94,21 +84,6 @@ func TestLoadConfig_MissingSecretFile(t *testing.T) {
 }
 
 func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
-	// Save original flag values
-	origEnableHTTPS := *enableHTTPS
-	origCertFile := *certFile
-	origKeyFile := *keyFile
-	defer func() {
-		*enableHTTPS = origEnableHTTPS
-		*certFile = origCertFile
-		*keyFile = origKeyFile
-	}()
-
-	// Set flag values
-	*enableHTTPS = true
-	*certFile = "flag_cert.pem"
-	*keyFile = "flag_key.pem"
-
 	// Create temporary secret file
 	tempDir := t.TempDir()
 	secretFile := filepath.Join(tempDir, "secret.key")
@@ -124,18 +99,19 @@ func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
 	os.Setenv("BASE_URL", "http://localhost:9090")
 	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
 	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("ENABLE_HTTPS", "true")
+	os.Setenv("TLS_CERT_FILE", "flag_cert.pem")
+	os.Setenv("TLS_KEY_FILE", "flag_key.pem")
 
 	defer func() {
 		os.Unsetenv("SERVER_ADDRESS")
 		os.Unsetenv("BASE_URL")
 		os.Unsetenv("FILE_STORAGE_PATH")
 		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("ENABLE_HTTPS")
+		os.Unsetenv("TLS_CERT_FILE")
+		os.Unsetenv("TLS_KEY_FILE")
 	}()
-
-	// Parse flags
-	if err := ParseFlags(); err != nil {
-		t.Fatalf("Failed to parse flags: %v", err)
-	}
 
 	config, err := LoadConfig()
 	if err != nil {
@@ -154,21 +130,6 @@ func TestLoadConfig_HTTPSWithFlags(t *testing.T) {
 }
 
 func TestLoadConfig_JSONConfig(t *testing.T) {
-	// Save original flag values
-	origEnableHTTPS := *enableHTTPS
-	origCertFile := *certFile
-	origKeyFile := *keyFile
-	defer func() {
-		*enableHTTPS = origEnableHTTPS
-		*certFile = origCertFile
-		*keyFile = origKeyFile
-	}()
-
-	// Reset flag values to defaults
-	*enableHTTPS = false
-	*certFile = "cert.pem"
-	*keyFile = "key.pem"
-
 	// Create temporary secret file
 	tempDir := t.TempDir()
 	secretFile := filepath.Join(tempDir, "secret.key")
@@ -205,11 +166,6 @@ func TestLoadConfig_JSONConfig(t *testing.T) {
 		os.Unsetenv("CONFIG")
 	}()
 
-	// Parse flags
-	if err := ParseFlags(); err != nil {
-		t.Fatalf("Failed to parse flags: %v", err)
-	}
-
 	config, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() failed: %v", err)
@@ -236,5 +192,41 @@ func TestLoadConfig_JSONConfig(t *testing.T) {
 	}
 	if config.KeyFile != "json_key.pem" {
 		t.Errorf("Expected KeyFile to be 'json_key.pem', got '%s'", config.KeyFile)
+	}
+}
+
+func TestLoadConfig_DatabaseDSNFlag(t *testing.T) {
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Set required environment variables
+	os.Setenv("SERVER_ADDRESS", "localhost:9090")
+	os.Setenv("BASE_URL", "http://localhost:9090")
+	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("DATABASE_DSN", "postgres://flag:pass@localhost/test")
+
+	defer func() {
+		os.Unsetenv("SERVER_ADDRESS")
+		os.Unsetenv("BASE_URL")
+		os.Unsetenv("FILE_STORAGE_PATH")
+		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("DATABASE_DSN")
+	}()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	if config.DatabaseDSN != "postgres://flag:pass@localhost/test" {
+		t.Errorf("Expected DatabaseDSN to be 'postgres://flag:pass@localhost/test', got '%s'", config.DatabaseDSN)
 	}
 }

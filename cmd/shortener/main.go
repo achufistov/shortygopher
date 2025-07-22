@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
@@ -21,7 +20,6 @@ var (
 	buildVersion string
 	buildDate    string
 	buildCommit  string
-	databaseDSN  = flag.String("database-dsn", "", "Database connection string")
 )
 
 func printBuildInfo() {
@@ -52,11 +50,6 @@ func main() {
 
 	// Parse command line flags
 	flag.Parse()
-
-	// Set database DSN from flag
-	if *databaseDSN != "" {
-		os.Setenv("DATABASE_DSN", *databaseDSN)
-	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
