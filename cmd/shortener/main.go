@@ -139,6 +139,10 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Create context that listens for interrupt signals
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	defer stop()
+
 	// Channel to listen for errors coming from the listener.
 	serverErrors := make(chan error, 1)
 
@@ -153,25 +157,21 @@ func main() {
 		}
 	}()
 
-	// Channel to listen for an interrupt or terminate signal from the OS.
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
-
 	// Blocking select waiting for either a signal or an error
 	select {
 	case err := <-serverErrors:
 		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Error starting server: %v", err)
+			log.Printf("Server error: %v", err)
 		}
-	case sig := <-shutdown:
-		log.Printf("Start shutdown. Signal: %v", sig)
+	case <-ctx.Done():
+		log.Printf("Start shutdown. Signal: %v", ctx.Err())
 
 		// Give outstanding requests a deadline for completion
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		// Trigger graceful shutdown
-		err := srv.Shutdown(ctx)
+		err := srv.Shutdown(shutdownCtx)
 		if err != nil {
 			log.Printf("Error during server shutdown: %v", err)
 
@@ -192,6 +192,13 @@ func main() {
 				log.Printf("Error saving URL mappings during shutdown: %v", err)
 			} else {
 				log.Printf("Successfully saved %d URL mappings to file", len(urlMap))
+			}
+		}
+
+		// Ensure database connection is properly closed
+		if dbStorage, ok := storageInstance.(*storage.DBStorage); ok {
+			if err := dbStorage.Close(); err != nil {
+				log.Printf("Error closing database connection: %v", err)
 			}
 		}
 
