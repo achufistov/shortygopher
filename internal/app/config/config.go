@@ -110,11 +110,11 @@ func LoadConfig() (*Config, error) {
 	if configPath != "" {
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read config file: %v", err)
+			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 
 		if err := json.Unmarshal(data, config); err != nil {
-			return nil, fmt.Errorf("failed to parse config file: %v", err)
+			return nil, fmt.Errorf("failed to parse config file: %w", err)
 		}
 	}
 
@@ -156,7 +156,7 @@ func LoadConfig() (*Config, error) {
 
 	secretKeyBytes, err := os.ReadFile(secretFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read JWT secret file: %v", err)
+		return nil, fmt.Errorf("failed to read JWT secret file: %w", err)
 	}
 	config.SecretKey = strings.TrimSpace(string(secretKeyBytes))
 
