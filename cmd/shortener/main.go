@@ -130,6 +130,9 @@ func main() {
 	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
 	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
 
+	// Internal stats endpoint with trusted subnet middleware
+	r.With(middleware.TrustedSubnetMiddleware(cfg.TrustedSubnet)).Get("/api/internal/stats", handlers.HandleGetStats())
+
 	// Create server with timeouts
 	srv := &http.Server{
 		Addr:         cfg.Address,

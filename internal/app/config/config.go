@@ -19,6 +19,7 @@ var (
 	enableHTTPS     = flag.Bool("s", false, "Enable HTTPS server")
 	certFile        = flag.String("cert", "cert.pem", "Path to TLS certificate file")
 	keyFile         = flag.String("key", "key.pem", "Path to TLS private key file")
+	trustedSubnet   = flag.String("t", "", "Trusted subnet in CIDR notation")
 )
 
 // Config contains all configuration parameters for the URL shortening service.
@@ -61,6 +62,9 @@ type Config struct {
 
 	// KeyFile is the path to the TLS private key file
 	KeyFile string `json:"key_file"`
+
+	// TrustedSubnet defines the trusted subnet in CIDR notation for internal endpoints
+	TrustedSubnet string `json:"trusted_subnet"`
 }
 
 // LoadConfig loads configuration from environment variables, command line flags, and JSON config file.
@@ -90,13 +94,14 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	// Initialize config with default values
 	config := &Config{
-		Address:     *addressFlag,
-		BaseURL:     *baseURLFlag,
-		FileStorage: *fileStoragePath,
-		DatabaseDSN: *databaseDSNFlag,
-		CertFile:    *certFile,
-		KeyFile:     *keyFile,
-		EnableHTTPS: *enableHTTPS,
+		Address:       *addressFlag,
+		BaseURL:       *baseURLFlag,
+		FileStorage:   *fileStoragePath,
+		DatabaseDSN:   *databaseDSNFlag,
+		CertFile:      *certFile,
+		KeyFile:       *keyFile,
+		EnableHTTPS:   *enableHTTPS,
+		TrustedSubnet: *trustedSubnet,
 	}
 
 	// Load from JSON config file if specified
@@ -146,6 +151,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if envKeyFile := os.Getenv("TLS_KEY_FILE"); envKeyFile != "" {
 		config.KeyFile = envKeyFile
+	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		config.TrustedSubnet = envTrustedSubnet
 	}
 
 	// Load JWT secret

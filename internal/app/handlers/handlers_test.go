@@ -598,3 +598,67 @@ func TestBatchResponse(t *testing.T) {
 		t.Errorf("Expected ShortURL 'http://localhost:8080/abc123', got '%s'", resp.ShortURL)
 	}
 }
+
+func TestHandleGetStats(t *testing.T) {
+	// Create test storage with some data
+	testStorage := storage.NewURLStorage()
+	testStorage.AddURL("abc123", "https://example1.com", "user1")
+	testStorage.AddURL("def456", "https://example2.com", "user1")
+	testStorage.AddURL("ghi789", "https://example3.com", "user2")
+
+	// Initialize handlers with test storage
+	InitStorage(testStorage)
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/internal/stats", nil)
+	rr := httptest.NewRecorder()
+
+	// Call handler
+	HandleGetStats().ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected content type %s, got %s", "application/json", contentType)
+	}
+
+	// Parse response
+	var response StatsResponse
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Check expected values
+	expectedURLs := 3
+	expectedUsers := 2
+
+	if response.URLs != expectedURLs {
+		t.Errorf("expected %d URLs, got %d", expectedURLs, response.URLs)
+	}
+
+	if response.Users != expectedUsers {
+		t.Errorf("expected %d users, got %d", expectedUsers, response.Users)
+	}
+}
+
+func TestHandleGetStatsMethodNotAllowed(t *testing.T) {
+	// Create test storage
+	testStorage := storage.NewURLStorage()
+	InitStorage(testStorage)
+
+	// Test with POST method
+	req := httptest.NewRequest("POST", "/api/internal/stats", nil)
+	rr := httptest.NewRecorder()
+
+	HandleGetStats().ServeHTTP(rr, req)
+
+	// Should return Method Not Allowed
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+}

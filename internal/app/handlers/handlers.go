@@ -57,6 +57,13 @@ type BatchResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
+// StatsResponse represents the response from the GET /api/internal/stats endpoint.
+// Contains statistics about the URL shortening service.
+type StatsResponse struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 // InitStorage initializes the global storage instance.
 // Must be called before using any handlers.
 //
@@ -438,6 +445,43 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 				log.Println("URLs deleted successfully")
 			}
 		}()
+	}
+}
+
+// HandleGetStats handles GET /api/internal/stats requests for service statistics.
+// Returns the number of URLs and unique users in the service.
+// Access is restricted to clients within the trusted subnet.
+//
+// HTTP methods: GET
+// Response: application/json with statistics
+//
+// Response codes:
+//   - 200: Statistics retrieved successfully
+//   - 403: Access denied (not in trusted subnet)
+//   - 500: Internal server error
+func HandleGetStats() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		urlCount, userCount, err := storageInstance.GetStats()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		response := StatsResponse{
+			URLs:  urlCount,
+			Users: userCount,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 

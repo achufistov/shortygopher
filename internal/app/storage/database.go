@@ -187,3 +187,26 @@ func (s *DBStorage) Ping() error {
 func (s *DBStorage) Close() error {
 	return s.db.Close()
 }
+
+// GetStats returns statistics about the storage.
+// Returns the number of URLs and unique users.
+func (s *DBStorage) GetStats() (int, int, error) {
+	var urlCount int
+	var userCount int
+
+	// Count total URLs
+	urlQuery := `SELECT COUNT(*) FROM urls`
+	err := s.db.QueryRow(urlQuery).Scan(&urlCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to count URLs: %v", err)
+	}
+
+	// Count unique users
+	userQuery := `SELECT COUNT(DISTINCT user_id) FROM urls`
+	err = s.db.QueryRow(userQuery).Scan(&userCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to count users: %v", err)
+	}
+
+	return urlCount, userCount, nil
+}
