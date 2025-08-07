@@ -40,7 +40,7 @@ type ShortenURLResponse struct {
 
 // ShortenURL creates a shortened URL from the original URL.
 func (s *Service) ShortenURL(ctx context.Context, req ShortenURLRequest) (*ShortenURLResponse, error) {
-	shortURL := generateShortURL()
+	shortURL := GenerateShortURL()
 	err := s.storage.AddURL(shortURL, req.OriginalURL, req.UserID)
 	
 	if err != nil {
@@ -126,7 +126,7 @@ func (s *Service) ShortenURLBatch(ctx context.Context, req ShortenURLBatchReques
 	urlsToSave := make(map[string]string, len(req.URLs))
 
 	for _, urlReq := range req.URLs {
-		shortURL := generateShortURL()
+		shortURL := GenerateShortURL()
 		err := s.storage.AddURL(shortURL, urlReq.OriginalURL, req.UserID)
 		
 		if err != nil && err.Error() != "URL already exists" {
@@ -249,8 +249,8 @@ func (s *Service) GetStats(ctx context.Context, req GetStatsRequest) (*GetStatsR
 	}, nil
 }
 
-// generateShortURL generates a random short URL identifier.
-func generateShortURL() string {
+// GenerateShortURL generates a random short URL identifier.
+func GenerateShortURL() string {
 	b := make([]byte, 6)
 	_, err := rand.Read(b)
 	if err != nil {

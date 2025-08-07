@@ -1,4 +1,4 @@
-package main
+package integration
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/go-chi/chi/v5"
 )
@@ -29,7 +30,9 @@ func TestStatsEndpointIntegration(t *testing.T) {
 	testStorage.AddURL("jkl012", "https://example4.com", "user3")
 
 	// Initialize handlers
+	testService := service.NewService(testStorage, cfg)
 	handlers.InitStorage(testStorage)
+	handlers.InitService(testService)
 
 	// Create router
 	r := chi.NewRouter()

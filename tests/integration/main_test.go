@@ -1,4 +1,4 @@
-package main
+package integration
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/go-chi/chi/v5"
 )
@@ -54,7 +55,9 @@ func Test_handlePost(t *testing.T) {
 
 	initConfig()
 	storageInstance := storage.NewURLStorage()
+	serviceInstance := service.NewService(storageInstance, cfg)
 	handlers.InitStorage(storageInstance)
+	handlers.InitService(serviceInstance)
 	tests := []struct {
 		name           string
 		requestBody    string
@@ -107,7 +110,9 @@ func Test_handleGet(t *testing.T) {
 
 	initConfig()
 	storageInstance := storage.NewURLStorage()
+	serviceInstance := service.NewService(storageInstance, cfg)
 	handlers.InitStorage(storageInstance)
+	handlers.InitService(serviceInstance)
 	shortURL := "abc123"
 	originalURL := "https://example.com"
 	userID := "test_user"
@@ -161,7 +166,9 @@ func Test_handleShortenPost(t *testing.T) {
 
 	initConfig()
 	storageInstance := storage.NewURLStorage()
+	serviceInstance := service.NewService(storageInstance, cfg)
 	handlers.InitStorage(storageInstance)
+	handlers.InitService(serviceInstance)
 	tests := []struct {
 		name           string
 		requestBody    string
@@ -251,7 +258,9 @@ func Test_handleBatchShortenPost(t *testing.T) {
 
 	initConfig()
 	storageInstance := storage.NewURLStorage()
+	serviceInstance := service.NewService(storageInstance, cfg)
 	handlers.InitStorage(storageInstance)
+	handlers.InitService(serviceInstance)
 	tests := []struct {
 		name           string
 		requestBody    string
