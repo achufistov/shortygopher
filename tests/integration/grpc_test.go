@@ -36,21 +36,29 @@ func TestGRPCIntegration(t *testing.T) {
 	proto.RegisterShortenerServiceServer(grpcServer, grpcService)
 
 	// Start server in goroutine
+	serverErr := make(chan error, 1)
 	go func() {
 		listener, err := net.Listen("tcp", cfg.GRPCAddress)
 		if err != nil {
-			t.Fatalf("Failed to listen: %v", err)
+			serverErr <- err
+			return
 		}
 		if err := grpcServer.Serve(listener); err != nil {
-			t.Fatalf("Failed to serve: %v", err)
+			serverErr <- err
 		}
 	}()
 
-	// Wait for server to start
+	// Wait for server to start and check for errors
 	time.Sleep(time.Second)
+	select {
+	case err := <-serverErr:
+		t.Fatalf("Server failed to start: %v", err)
+	default:
+		// Server started successfully
+	}
 
 	// Connect to gRPC server
-	conn, err := grpc.Dial(cfg.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(cfg.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
