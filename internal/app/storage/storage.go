@@ -46,4 +46,8 @@ type Storage interface {
 
 	// Close closes the storage connection.
 	Close() error
+
+	// GetStats returns statistics about the storage.
+	// Returns the number of URLs and unique users.
+	GetStats() (int, int, error)
 }

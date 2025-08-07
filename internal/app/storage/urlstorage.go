@@ -167,3 +167,20 @@ func (s *URLStorage) Ping() error {
 func (s *URLStorage) Close() error {
 	return nil
 }
+
+// GetStats returns statistics about the storage.
+// Returns the number of URLs and unique users.
+func (s *URLStorage) GetStats() (int, int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	urlCount := len(s.URLs)
+	userSet := make(map[string]bool)
+
+	for _, info := range s.URLs {
+		userSet[info.UserID] = true
+	}
+
+	userCount := len(userSet)
+	return urlCount, userCount, nil
+}

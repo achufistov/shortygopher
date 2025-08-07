@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -13,12 +14,17 @@ import (
 	"time"
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
+	grpcHandler "github.com/achufistov/shortygopher.git/internal/app/grpc"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
+	"github.com/achufistov/shortygopher.git/proto"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -105,7 +111,18 @@ func main() {
 		}
 	}
 
+	// Initialize service layer
+	serviceInstance := service.NewService(storageInstance, cfg)
 	handlers.InitStorage(storageInstance)
+	handlers.InitService(serviceInstance)
+
+	// Initialize gRPC server with middleware
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcHandler.AuthInterceptor()),
+	)
+	grpcService := grpcHandler.NewServer(serviceInstance)
+	proto.RegisterShortenerServiceServer(grpcServer, grpcService)
+	reflection.Register(grpcServer)
 
 	r := chi.NewRouter()
 
@@ -130,8 +147,11 @@ func main() {
 	r.Get("/api/user/urls", handlers.HandleGetUserURLs(cfg))
 	r.Delete("/api/user/urls", handlers.HandleDeleteUserURLs(cfg))
 
-	// Create server with timeouts
-	srv := &http.Server{
+	// Internal stats endpoint with trusted subnet middleware
+	r.With(middleware.TrustedSubnetMiddleware(cfg.TrustedSubnet)).Get("/api/internal/stats", handlers.HandleGetStats())
+
+	// Create HTTP server with timeouts
+	httpSrv := &http.Server{
 		Addr:         cfg.Address,
 		Handler:      r,
 		ReadTimeout:  5 * time.Second,
@@ -139,22 +159,34 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Create gRPC server listener
+	grpcListener, err := net.Listen("tcp", cfg.GRPCAddress)
+	if err != nil {
+		log.Fatalf("Failed to listen for gRPC: %v", err)
+	}
+
 	// Create context that listens for interrupt signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer stop()
 
-	// Channel to listen for errors coming from the listener.
-	serverErrors := make(chan error, 1)
+	// Channel to listen for errors coming from the listeners.
+	serverErrors := make(chan error, 2)
 
-	// Start the server in a goroutine
+	// Start the HTTP server in a goroutine
 	go func() {
-		log.Printf("Server is running on %s", cfg.Address)
+		log.Printf("HTTP server is running on %s", cfg.Address)
 		if cfg.EnableHTTPS {
 			log.Printf("HTTPS enabled, using certificate: %s and key: %s", cfg.CertFile, cfg.KeyFile)
-			serverErrors <- srv.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+			serverErrors <- httpSrv.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
 		} else {
-			serverErrors <- srv.ListenAndServe()
+			serverErrors <- httpSrv.ListenAndServe()
 		}
+	}()
+
+	// Start the gRPC server in a goroutine
+	go func() {
+		log.Printf("gRPC server is running on %s", cfg.GRPCAddress)
+		serverErrors <- grpcServer.Serve(grpcListener)
 	}()
 
 	// Blocking select waiting for either a signal or an error
@@ -170,17 +202,20 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Trigger graceful shutdown
-		err := srv.Shutdown(shutdownCtx)
+		// Trigger graceful shutdown for HTTP server
+		err := httpSrv.Shutdown(shutdownCtx)
 		if err != nil {
-			log.Printf("Error during server shutdown: %v", err)
+			log.Printf("Error during HTTP server shutdown: %v", err)
 
 			// If shutdown times out, force close
-			err = srv.Close()
+			err = httpSrv.Close()
 			if err != nil {
-				log.Printf("Error closing server: %v", err)
+				log.Printf("Error closing HTTP server: %v", err)
 			}
 		}
+
+		// Trigger graceful shutdown for gRPC server
+		grpcServer.GracefulStop()
 
 		// If using file storage, ensure all data is saved
 		if cfg.FileStorage != "" {

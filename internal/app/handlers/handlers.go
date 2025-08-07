@@ -2,8 +2,6 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,11 +11,13 @@ import (
 
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/go-chi/chi/v5"
 )
 
 var storageInstance storage.Storage
+var serviceInstance *service.Service
 
 // ShortenRequest represents a URL shortening request in JSON format.
 // Used in the POST /api/shorten endpoint.
@@ -57,6 +57,13 @@ type BatchResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
+// StatsResponse represents the response from the GET /api/internal/stats endpoint.
+// Contains statistics about the URL shortening service.
+type StatsResponse struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 // InitStorage initializes the global storage instance.
 // Must be called before using any handlers.
 //
@@ -66,6 +73,12 @@ type BatchResponse struct {
 //	handlers.InitStorage(storage)
 func InitStorage(storage storage.Storage) {
 	storageInstance = storage
+}
+
+// InitService initializes the global service instance.
+// Must be called before using any handlers.
+func InitService(service *service.Service) {
+	serviceInstance = service
 }
 
 // HandlePost handles POST / requests for URL shortening in text format.
@@ -118,33 +131,25 @@ func HandlePost(cfg *config.Config, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL := generateShortURL()
-	err := storageInstance.AddURL(shortURL, originalURL, userID)
+	serviceReq := service.ShortenURLRequest{
+		OriginalURL: originalURL,
+		UserID:      userID,
+	}
+
+	resp, err := serviceInstance.ShortenURL(r.Context(), serviceReq)
 	if err != nil {
-		if err.Error() == "URL already exists" {
-			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(originalURL)
-			if !exists {
-				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusConflict)
-			fmt.Fprintf(w, "%s/%s", cfg.BaseURL, existingShortURL)
-			return
-		}
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		http.Error(w, "Failed to shorten URL", http.StatusInternalServerError)
 		return
 	}
 
-	if cfg.FileStorage != "" {
-		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, originalURL); err != nil {
-			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
-		}
+	statusCode := http.StatusCreated
+	if resp.AlreadyExists {
+		statusCode = http.StatusConflict
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "%s/%s", cfg.BaseURL, shortURL)
+	w.WriteHeader(statusCode)
+	fmt.Fprint(w, resp.ShortURL)
 }
 
 // HandleShortenPost handles POST /api/shorten requests for URL shortening in JSON format.
@@ -178,41 +183,29 @@ func HandleShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	shortURL := generateShortURL()
-	err := storageInstance.AddURL(shortURL, req.OriginalURL, userID)
+	serviceReq := service.ShortenURLRequest{
+		OriginalURL: req.OriginalURL,
+		UserID:      userID,
+	}
+
+	resp, err := serviceInstance.ShortenURL(r.Context(), serviceReq)
 	if err != nil {
-		if err.Error() == "URL already exists" {
-			existingShortURL, exists := storageInstance.GetShortURLByOriginalURL(req.OriginalURL)
-			if !exists {
-				http.Error(w, "Failed to get existing short URL", http.StatusInternalServerError)
-				return
-			}
-			resp := ShortenResponse{
-				ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, existingShortURL),
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			if err := json.NewEncoder(w).Encode(resp); err != nil {
-				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			}
-			return
-		}
-		http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
+		http.Error(w, "Failed to shorten URL", http.StatusInternalServerError)
 		return
 	}
 
-	if cfg.FileStorage != "" {
-		if err := storage.SaveSingleURLMapping(cfg.FileStorage, shortURL, req.OriginalURL); err != nil {
-			log.Printf("Warning: Failed to save URL mapping to file: %v", err)
-		}
+	httpResp := ShortenResponse{
+		ShortURL: resp.ShortURL,
 	}
 
-	resp := ShortenResponse{
-		ShortURL: fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
+	statusCode := http.StatusCreated
+	if resp.AlreadyExists {
+		statusCode = http.StatusConflict
 	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(httpResp); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -237,19 +230,27 @@ func HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	originalURL, exists, isDeleted := storageInstance.GetURL(id)
+	serviceReq := service.GetURLRequest{
+		ShortID: id,
+	}
 
-	if !exists {
+	resp, err := serviceInstance.GetURL(r.Context(), serviceReq)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if !resp.Exists {
 		http.Error(w, "URL not found", http.StatusNotFound)
 		return
 	}
 
-	if isDeleted {
+	if resp.Deleted {
 		http.Error(w, "URL has been deleted", http.StatusGone)
 		return
 	}
 
-	w.Header().Set("Location", originalURL)
+	w.Header().Set("Location", resp.OriginalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
@@ -270,7 +271,10 @@ func HandlePing(storageInstance storage.Storage) http.HandlerFunc {
 			http.Error(w, "Invalid request method", http.StatusBadRequest)
 			return
 		}
-		if err := storageInstance.Ping(); err != nil {
+		
+		serviceReq := service.PingRequest{}
+		resp, err := serviceInstance.Ping(r.Context(), serviceReq)
+		if err != nil || !resp.OK {
 			http.Error(w, "Failed to ping storage", http.StatusInternalServerError)
 			return
 		}
@@ -317,27 +321,30 @@ func HandleBatchShortenPost(cfg *config.Config, w http.ResponseWriter, r *http.R
 		return
 	}
 
-	batchResponses := make([]BatchResponse, 0, len(batchRequests))
-
-	urlsToSave := make(map[string]string, len(batchRequests))
-
-	for _, req := range batchRequests {
-		shortURL := generateShortURL()
-		err := storageInstance.AddURL(shortURL, req.OriginalURL, userID)
-		if err != nil && err.Error() != "URL already exists" {
-			http.Error(w, "Failed to save URL mapping", http.StatusInternalServerError)
-			return
-		}
-		batchResponses = append(batchResponses, BatchResponse{
+	serviceURLs := make([]service.BatchRequest, len(batchRequests))
+	for i, req := range batchRequests {
+		serviceURLs[i] = service.BatchRequest{
 			CorrelationID: req.CorrelationID,
-			ShortURL:      fmt.Sprintf("%s/%s", cfg.BaseURL, shortURL),
-		})
-		urlsToSave[shortURL] = req.OriginalURL
+			OriginalURL:   req.OriginalURL,
+		}
 	}
 
-	if cfg.FileStorage != "" && len(urlsToSave) > 0 {
-		if err := storage.SaveURLMappings(cfg.FileStorage, urlsToSave); err != nil {
-			log.Printf("Warning: Failed to save URL mappings to file: %v", err)
+	serviceReq := service.ShortenURLBatchRequest{
+		URLs:   serviceURLs,
+		UserID: userID,
+	}
+
+	resp, err := serviceInstance.ShortenURLBatch(r.Context(), serviceReq)
+	if err != nil {
+		http.Error(w, "Failed to shorten URLs batch", http.StatusInternalServerError)
+		return
+	}
+
+	batchResponses := make([]BatchResponse, len(resp.URLs))
+	for i, url := range resp.URLs {
+		batchResponses[i] = BatchResponse{
+			CorrelationID: url.CorrelationID,
+			ShortURL:      url.ShortURL,
 		}
 	}
 
@@ -368,28 +375,37 @@ func HandleGetUserURLs(cfg *config.Config) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		urls, err := storageInstance.GetURLsByUser(userID)
+		
+		serviceReq := service.GetUserURLsRequest{
+			UserID: userID,
+		}
+		
+		resp, err := serviceInstance.GetUserURLs(r.Context(), serviceReq)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		if len(urls) == 0 {
+		
+		if len(resp.URLs) == 0 {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		
 		response := make([]struct {
 			ShortURL    string `json:"short_url"`
 			OriginalURL string `json:"original_url"`
-		}, 0)
-		for short, original := range urls {
-			response = append(response, struct {
+		}, len(resp.URLs))
+		
+		for i, url := range resp.URLs {
+			response[i] = struct {
 				ShortURL    string `json:"short_url"`
 				OriginalURL string `json:"original_url"`
 			}{
-				ShortURL:    fmt.Sprintf("%s/%s", cfg.BaseURL, short),
-				OriginalURL: original,
-			})
+				ShortURL:    url.ShortURL,
+				OriginalURL: url.OriginalURL,
+			}
 		}
+		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -421,10 +437,19 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
+		userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+		if !ok {
+			userID = "" // Use empty string for anonymous deletions
+		}
+
 		deleteChan := make(chan error)
 
 		go func() {
-			err := storageInstance.DeleteURLs(shortURLs, "")
+			serviceReq := service.DeleteUserURLsRequest{
+				ShortURLs: shortURLs,
+				UserID:    userID,
+			}
+			_, err := serviceInstance.DeleteUserURLs(r.Context(), serviceReq)
 			deleteChan <- err
 		}()
 
@@ -441,11 +466,42 @@ func HandleDeleteUserURLs(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func generateShortURL() string {
-	b := make([]byte, 6)
-	_, err := rand.Read(b)
-	if err != nil {
-		log.Fatal(err)
+// HandleGetStats handles GET /api/internal/stats requests for service statistics.
+// Returns the number of URLs and unique users in the service.
+// Access is restricted to clients within the trusted subnet.
+//
+// HTTP methods: GET
+// Response: application/json with statistics
+//
+// Response codes:
+//   - 200: Statistics retrieved successfully
+//   - 403: Access denied (not in trusted subnet)
+//   - 500: Internal server error
+func HandleGetStats() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		serviceReq := service.GetStatsRequest{}
+		resp, err := serviceInstance.GetStats(r.Context(), serviceReq)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		response := StatsResponse{
+			URLs:  resp.URLs,
+			Users: resp.Users,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
-	return base64.URLEncoding.EncodeToString(b)[:6]
 }
+
+

@@ -11,6 +11,7 @@ import (
 
 var (
 	addressFlag     = flag.String("a", "localhost:8080", "HTTP server address")
+	grpcAddressFlag = flag.String("grpc", "localhost:9090", "gRPC server address")
 	baseURLFlag     = flag.String("b", "http://localhost:8080", "Base URL for shortened links")
 	fileStoragePath = flag.String("f", "urls.json", "File for storing urls")
 	databaseDSNFlag = flag.String("d", "", "Database connection string")
@@ -19,6 +20,7 @@ var (
 	enableHTTPS     = flag.Bool("s", false, "Enable HTTPS server")
 	certFile        = flag.String("cert", "cert.pem", "Path to TLS certificate file")
 	keyFile         = flag.String("key", "key.pem", "Path to TLS private key file")
+	trustedSubnet   = flag.String("t", "", "Trusted subnet in CIDR notation")
 )
 
 // Config contains all configuration parameters for the URL shortening service.
@@ -41,6 +43,9 @@ type Config struct {
 	// Address defines the address and port for the HTTP server (e.g., "localhost:8080")
 	Address string `json:"server_address"`
 
+	// GRPCAddress defines the address and port for the gRPC server (e.g., "localhost:9090")
+	GRPCAddress string `json:"grpc_address"`
+
 	// BaseURL defines the base URL for generating shortened links
 	BaseURL string `json:"base_url"`
 
@@ -61,6 +66,9 @@ type Config struct {
 
 	// KeyFile is the path to the TLS private key file
 	KeyFile string `json:"key_file"`
+
+	// TrustedSubnet defines the trusted subnet in CIDR notation for internal endpoints
+	TrustedSubnet string `json:"trusted_subnet"`
 }
 
 // LoadConfig loads configuration from environment variables, command line flags, and JSON config file.
@@ -90,13 +98,15 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	// Initialize config with default values
 	config := &Config{
-		Address:     *addressFlag,
-		BaseURL:     *baseURLFlag,
-		FileStorage: *fileStoragePath,
-		DatabaseDSN: *databaseDSNFlag,
-		CertFile:    *certFile,
-		KeyFile:     *keyFile,
-		EnableHTTPS: *enableHTTPS,
+		Address:       *addressFlag,
+		GRPCAddress:   *grpcAddressFlag,
+		BaseURL:       *baseURLFlag,
+		FileStorage:   *fileStoragePath,
+		DatabaseDSN:   *databaseDSNFlag,
+		CertFile:      *certFile,
+		KeyFile:       *keyFile,
+		EnableHTTPS:   *enableHTTPS,
+		TrustedSubnet: *trustedSubnet,
 	}
 
 	// Load from JSON config file if specified
@@ -129,6 +139,9 @@ func LoadConfig() (*Config, error) {
 	if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
 		config.Address = envAddr
 	}
+	if envGRPCAddr := os.Getenv("GRPC_ADDRESS"); envGRPCAddr != "" {
+		config.GRPCAddress = envGRPCAddr
+	}
 	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
 		config.BaseURL = envBaseURL
 	}
@@ -146,6 +159,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if envKeyFile := os.Getenv("TLS_KEY_FILE"); envKeyFile != "" {
 		config.KeyFile = envKeyFile
+	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		config.TrustedSubnet = envTrustedSubnet
 	}
 
 	// Load JWT secret

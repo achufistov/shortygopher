@@ -14,6 +14,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/go-chi/chi/v5"
 )
@@ -48,6 +49,10 @@ func ExampleHandlePost() {
 	// Create storage and initialize handlers
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
+	
+	// Initialize service
+	serviceInstance := service.NewService(storageInstance, cfg)
+	handlers.InitService(serviceInstance)
 
 	// Create HTTP request
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
@@ -101,6 +106,10 @@ func ExampleHandleShortenPost() {
 
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
+	
+	// Initialize service
+	serviceInstance := service.NewService(storageInstance, cfg)
+	handlers.InitService(serviceInstance)
 
 	// Create JSON request
 	reqBody := handlers.ShortenRequest{
@@ -157,6 +166,10 @@ func ExampleHandleBatchShortenPost() {
 
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
+	
+	// Initialize service
+	serviceInstance := service.NewService(storageInstance, cfg)
+	handlers.InitService(serviceInstance)
 
 	// Create batch request
 	batchReq := []handlers.BatchRequest{
@@ -191,8 +204,18 @@ func ExampleHandleBatchShortenPost() {
 // ExampleHandleGet demonstrates getting the original URL
 // and redirect via GET /{id}.
 func ExampleHandleGet() {
+	cfg := &config.Config{
+		Address:     ":8080",
+		BaseURL:     "http://localhost:8080",
+		FileStorage: "",
+	}
+	
 	storageInstance := storage.NewURLStorage()
 	handlers.InitStorage(storageInstance)
+	
+	// Initialize service
+	serviceInstance := service.NewService(storageInstance, cfg)
+	handlers.InitService(serviceInstance)
 
 	// First, add URL to storage
 	shortURL := "example123"

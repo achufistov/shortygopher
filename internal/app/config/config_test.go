@@ -230,3 +230,83 @@ func TestLoadConfig_DatabaseDSNFlag(t *testing.T) {
 		t.Errorf("Expected DatabaseDSN to be 'postgres://flag:pass@localhost/test', got '%s'", config.DatabaseDSN)
 	}
 }
+
+func TestLoadConfig_TrustedSubnet(t *testing.T) {
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Set required environment variables
+	os.Setenv("SERVER_ADDRESS", "localhost:9090")
+	os.Setenv("BASE_URL", "http://localhost:9090")
+	os.Setenv("FILE_STORAGE_PATH", "test_urls.json")
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("TRUSTED_SUBNET", "192.168.1.0/24")
+
+	defer func() {
+		os.Unsetenv("SERVER_ADDRESS")
+		os.Unsetenv("BASE_URL")
+		os.Unsetenv("FILE_STORAGE_PATH")
+		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("TRUSTED_SUBNET")
+	}()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	if config.TrustedSubnet != "192.168.1.0/24" {
+		t.Errorf("Expected TrustedSubnet to be '192.168.1.0/24', got '%s'", config.TrustedSubnet)
+	}
+}
+
+func TestLoadConfig_TrustedSubnetJSON(t *testing.T) {
+	// Create temporary secret file
+	tempDir := t.TempDir()
+	secretFile := filepath.Join(tempDir, "secret.key")
+	secretContent := "test-secret-key"
+
+	err := os.WriteFile(secretFile, []byte(secretContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test secret file: %v", err)
+	}
+
+	// Create temporary JSON config file with trusted subnet
+	configFile := filepath.Join(tempDir, "config.json")
+	configContent := `{
+		"server_address": "localhost:9999",
+		"base_url": "http://localhost:9999",
+		"file_storage_path": "json_urls.json",
+		"trusted_subnet": "10.0.0.0/8"
+	}`
+
+	err = os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	// Set minimal required environment variables
+	os.Setenv("JWT_SECRET_FILE", secretFile)
+	os.Setenv("CONFIG", configFile)
+
+	defer func() {
+		os.Unsetenv("JWT_SECRET_FILE")
+		os.Unsetenv("CONFIG")
+	}()
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+
+	if config.TrustedSubnet != "10.0.0.0/8" {
+		t.Errorf("Expected TrustedSubnet to be '10.0.0.0/8', got '%s'", config.TrustedSubnet)
+	}
+}

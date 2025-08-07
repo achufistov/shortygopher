@@ -1,64 +1,104 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
-	"strings"
+	"time"
+
+	"github.com/achufistov/shortygopher.git/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 func main() {
-	endpoint := "http://localhost:8080/"
-	// data container for the request
-	data := url.Values{}
+	// Get gRPC address from environment or use default
+	grpcAddr := "localhost:9090"
+	if envAddr := os.Getenv("GRPC_ADDRESS"); envAddr != "" {
+		grpcAddr = envAddr
+	}
 
-	fmt.Println("Введите длинный URL")
-
-	reader := bufio.NewReader(os.Stdin)
-
-	long, err := reader.ReadString('\n')
+	// Connect to gRPC server
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Ошибка чтения URL: %v", err)
+		log.Fatalf("Failed to connect: %v", err)
 	}
-	long = strings.TrimSuffix(long, "\n")
+	defer conn.Close()
 
-	// URL validation
-	if long == "" {
-		log.Fatalf("URL не может быть пустым")
-	}
+	client := proto.NewShortenerServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
-	_, err = url.ParseRequestURI(long)
+	// Add user ID to metadata
+	md := metadata.Pairs("user-id", "test-user-123")
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// Test Ping
+	fmt.Println("Testing Ping...")
+	pingResp, err := client.Ping(ctx, &proto.PingRequest{})
 	if err != nil {
-		log.Fatalf("Некорректный URL: %v", err)
+		log.Printf("Ping failed: %v", err)
+	} else {
+		fmt.Printf("Ping response: %v\n", pingResp.Ok)
 	}
 
-	data.Set("url", long)
-
-	client := &http.Client{}
-
-	request, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(data.Encode()))
+	// Test ShortenURL
+	fmt.Println("\nTesting ShortenURL...")
+	shortenResp, err := client.ShortenURL(ctx, &proto.ShortenURLRequest{
+		OriginalUrl: "https://example.com/very/long/url",
+	})
 	if err != nil {
-		log.Fatalf("Ошибка создания запроса: %v", err)
+		log.Printf("ShortenURL failed: %v", err)
+	} else {
+		fmt.Printf("Shortened URL: %s (already exists: %v)\n", shortenResp.ShortUrl, shortenResp.AlreadyExists)
 	}
 
-	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	response, err := client.Do(request)
+	// Test ShortenURLBatch
+	fmt.Println("\nTesting ShortenURLBatch...")
+	batchResp, err := client.ShortenURLBatch(ctx, &proto.ShortenURLBatchRequest{
+		Urls: []*proto.BatchRequest{
+			{
+				CorrelationId: "1",
+				OriginalUrl:   "https://google.com",
+			},
+			{
+				CorrelationId: "2",
+				OriginalUrl:   "https://github.com",
+			},
+		},
+	})
 	if err != nil {
-		log.Fatalf("Ошибка отправки запроса: %v", err)
+		log.Printf("ShortenURLBatch failed: %v", err)
+	} else {
+		fmt.Println("Batch shortened URLs:")
+		for _, url := range batchResp.Urls {
+			fmt.Printf("  %s: %s\n", url.CorrelationId, url.ShortUrl)
+		}
 	}
 
-	fmt.Println("Статус-код ", response.Status)
-	defer response.Body.Close()
-
-	body, err := io.ReadAll(response.Body)
+	// Test GetUserURLs
+	fmt.Println("\nTesting GetUserURLs...")
+	userURLsResp, err := client.GetUserURLs(ctx, &proto.GetUserURLsRequest{})
 	if err != nil {
-		log.Fatalf("Ошибка чтения тела ответа: %v", err)
+		log.Printf("GetUserURLs failed: %v", err)
+	} else {
+		fmt.Printf("User URLs count: %d\n", len(userURLsResp.Urls))
+		for _, url := range userURLsResp.Urls {
+			fmt.Printf("  %s -> %s\n", url.ShortUrl, url.OriginalUrl)
+		}
 	}
 
-	fmt.Println(string(body))
+	// Test GetStats (without user ID in metadata)
+	fmt.Println("\nTesting GetStats...")
+	statsCtx := context.Background()
+	statsResp, err := client.GetStats(statsCtx, &proto.GetStatsRequest{})
+	if err != nil {
+		log.Printf("GetStats failed: %v", err)
+	} else {
+		fmt.Printf("Stats: URLs=%d, Users=%d\n", statsResp.Urls, statsResp.Users)
+	}
+
+	fmt.Println("\nAll tests completed!")
 }

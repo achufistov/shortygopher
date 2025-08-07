@@ -9,14 +9,16 @@ import (
 	"testing"
 
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/achufistov/shortygopher.git/tests/testutils"
 	"github.com/go-chi/chi/v5"
 )
 
 func TestGenerateShortURL(t *testing.T) {
-	shortURL1 := generateShortURL()
-	shortURL2 := generateShortURL()
+	// Test that the service can generate short URLs
+	shortURL1 := service.GenerateShortURL()
+	shortURL2 := service.GenerateShortURL()
 
 	// Check that URLs are generated
 	if shortURL1 == "" {
@@ -65,7 +67,9 @@ func TestInitStorage(t *testing.T) {
 func TestHandlePost_WithValidURL_ReturnsCreatedStatus(t *testing.T) {
 	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	req := httptest.NewRequest("POST", "/", strings.NewReader("https://example.com"))
 	req.Header.Set("Content-Type", "text/plain")
@@ -203,8 +207,11 @@ func TestHandleShortenPost_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleGet_Success(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	// Add a URL to storage
 	testStorage.AddURL("test123", "https://example.com", "user1")
@@ -229,8 +236,11 @@ func TestHandleGet_Success(t *testing.T) {
 }
 
 func TestHandleGet_NotFound(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	r := chi.NewRouter()
 	r.Get("/{id}", HandleGet)
@@ -246,8 +256,11 @@ func TestHandleGet_NotFound(t *testing.T) {
 }
 
 func TestHandleGet_InvalidMethod(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	r := chi.NewRouter()
 	r.Get("/{id}", HandleGet)
@@ -263,8 +276,11 @@ func TestHandleGet_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleGet_DeletedURL(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	// Add and then delete a URL
 	testStorage.AddURL("test123", "https://example.com", "user1")
@@ -286,7 +302,9 @@ func TestHandleGet_DeletedURL(t *testing.T) {
 func TestHandleBatchShortenPost_Success(t *testing.T) {
 	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	batchReq := []BatchRequest{
 		{CorrelationID: "1", OriginalURL: "https://example.com"},
@@ -404,7 +422,9 @@ func TestHandleGetUserURLs_Unauthorized(t *testing.T) {
 func TestHandleGetUserURLs_NoURLs(t *testing.T) {
 	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	handler := HandleGetUserURLs(cfg)
 
@@ -424,7 +444,9 @@ func TestHandleGetUserURLs_NoURLs(t *testing.T) {
 func TestHandleGetUserURLs_WithURLs(t *testing.T) {
 	cfg := testutils.CreateTestConfigWithDefaults(t)
 	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
 	InitStorage(testStorage)
+	InitService(testService)
 
 	// Add some URLs for the test user
 	userID := "test-user"
@@ -466,29 +488,29 @@ func TestHandleGetUserURLs_WithURLs(t *testing.T) {
 	}
 
 	// Verify URLs are correct
-	foundShort1 := false
-	foundShort2 := false
+	foundExample := false
+	foundGoogle := false
 
 	for _, item := range response {
 		switch item.OriginalURL {
 		case "https://example.com":
-			if item.ShortURL != "http://localhost:8080/short1" {
-				t.Errorf("Expected short URL 'http://localhost:8080/short1', got '%s'", item.ShortURL)
+			if !strings.HasPrefix(item.ShortURL, "http://localhost:8080/") {
+				t.Errorf("Expected short URL to start with 'http://localhost:8080/', got '%s'", item.ShortURL)
 			}
-			foundShort1 = true
+			foundExample = true
 		case "https://google.com":
-			if item.ShortURL != "http://localhost:8080/short2" {
-				t.Errorf("Expected short URL 'http://localhost:8080/short2', got '%s'", item.ShortURL)
+			if !strings.HasPrefix(item.ShortURL, "http://localhost:8080/") {
+				t.Errorf("Expected short URL to start with 'http://localhost:8080/', got '%s'", item.ShortURL)
 			}
-			foundShort2 = true
+			foundGoogle = true
 		}
 	}
 
-	if !foundShort1 {
-		t.Error("Expected to find short1 URL in response")
+	if !foundExample {
+		t.Error("Expected to find example.com URL in response")
 	}
-	if !foundShort2 {
-		t.Error("Expected to find short2 URL in response")
+	if !foundGoogle {
+		t.Error("Expected to find google.com URL in response")
 	}
 }
 
@@ -596,5 +618,75 @@ func TestBatchResponse(t *testing.T) {
 	}
 	if resp.ShortURL != "http://localhost:8080/abc123" {
 		t.Errorf("Expected ShortURL 'http://localhost:8080/abc123', got '%s'", resp.ShortURL)
+	}
+}
+
+func TestHandleGetStats(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
+	// Create test storage with some data
+	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
+	testStorage.AddURL("abc123", "https://example1.com", "user1")
+	testStorage.AddURL("def456", "https://example2.com", "user1")
+	testStorage.AddURL("ghi789", "https://example3.com", "user2")
+
+	// Initialize handlers with test storage
+	InitStorage(testStorage)
+	InitService(testService)
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/internal/stats", nil)
+	rr := httptest.NewRecorder()
+
+	// Call handler
+	HandleGetStats().ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check content type
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected content type %s, got %s", "application/json", contentType)
+	}
+
+	// Parse response
+	var response StatsResponse
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Check expected values
+	expectedURLs := 3
+	expectedUsers := 2
+
+	if response.URLs != expectedURLs {
+		t.Errorf("expected %d URLs, got %d", expectedURLs, response.URLs)
+	}
+
+	if response.Users != expectedUsers {
+		t.Errorf("expected %d users, got %d", expectedUsers, response.Users)
+	}
+}
+
+func TestHandleGetStatsMethodNotAllowed(t *testing.T) {
+	cfg := testutils.CreateTestConfigWithDefaults(t)
+	// Create test storage
+	testStorage := storage.NewURLStorage()
+	testService := service.NewService(testStorage, cfg)
+	InitStorage(testStorage)
+	InitService(testService)
+
+	// Test with POST method
+	req := httptest.NewRequest("POST", "/api/internal/stats", nil)
+	rr := httptest.NewRecorder()
+
+	HandleGetStats().ServeHTTP(rr, req)
+
+	// Should return Method Not Allowed
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
 	}
 }

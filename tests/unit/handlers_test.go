@@ -12,6 +12,7 @@ import (
 	"github.com/achufistov/shortygopher.git/internal/app/config"
 	"github.com/achufistov/shortygopher.git/internal/app/handlers"
 	"github.com/achufistov/shortygopher.git/internal/app/middleware"
+	"github.com/achufistov/shortygopher.git/internal/app/service"
 	"github.com/achufistov/shortygopher.git/internal/app/storage"
 	"github.com/go-chi/chi/v5"
 )
@@ -65,6 +66,10 @@ func TestHandlePost_WithValidURL_ReturnsCreatedStatus(t *testing.T) {
 
 	testStorage := storage.NewURLStorage()
 	handlers.InitStorage(testStorage)
+	
+	// Initialize service
+	serviceInstance := service.NewService(testStorage, cfg)
+	handlers.InitService(serviceInstance)
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
 	req.Header.Set("Content-Type", "text/plain")
@@ -114,6 +119,10 @@ func TestHandleShortenPost_Success(t *testing.T) {
 
 	testStorage := storage.NewURLStorage()
 	handlers.InitStorage(testStorage)
+	
+	// Initialize service
+	serviceInstance := service.NewService(testStorage, cfg)
+	handlers.InitService(serviceInstance)
 
 	reqBody := handlers.ShortenRequest{
 		OriginalURL: "https://example.com",
@@ -158,8 +167,18 @@ func TestHandleGet_InvalidMethod(t *testing.T) {
 }
 
 func TestHandleGet_NotFound(t *testing.T) {
+	cfg := &config.Config{
+		Address:     ":8080",
+		BaseURL:     "http://localhost:8080",
+		FileStorage: "",
+	}
+	
 	testStorage := storage.NewURLStorage()
 	handlers.InitStorage(testStorage)
+	
+	// Initialize service
+	serviceInstance := service.NewService(testStorage, cfg)
+	handlers.InitService(serviceInstance)
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 
@@ -177,8 +196,18 @@ func TestHandleGet_NotFound(t *testing.T) {
 }
 
 func TestHandleGet_Success(t *testing.T) {
+	cfg := &config.Config{
+		Address:     ":8080",
+		BaseURL:     "http://localhost:8080",
+		FileStorage: "",
+	}
+	
 	testStorage := storage.NewURLStorage()
 	handlers.InitStorage(testStorage)
+	
+	// Initialize service
+	serviceInstance := service.NewService(testStorage, cfg)
+	handlers.InitService(serviceInstance)
 
 	shortURL := "abc123"
 	originalURL := "https://example.com"
@@ -205,8 +234,18 @@ func TestHandleGet_Success(t *testing.T) {
 }
 
 func TestHandleGet_Deleted(t *testing.T) {
+	cfg := &config.Config{
+		Address:     ":8080",
+		BaseURL:     "http://localhost:8080",
+		FileStorage: "",
+	}
+	
 	testStorage := storage.NewURLStorage()
 	handlers.InitStorage(testStorage)
+	
+	// Initialize service
+	serviceInstance := service.NewService(testStorage, cfg)
+	handlers.InitService(serviceInstance)
 
 	shortURL := "abc123"
 	originalURL := "https://example.com"
