@@ -1,8 +1,7 @@
 module github.com/achufistov/shortygopher.git
 
-go 1.23.0
+go 1.22.0
 
-toolchain go1.24.4
 
 require (
 	github.com/go-chi/chi/v5 v5.2.1
