@@ -2,7 +2,6 @@ module github.com/achufistov/shortygopher.git
 
 go 1.22.0
 
-
 require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
@@ -27,3 +26,5 @@ require (
 	golang.org/x/text v0.27.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 )
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.73.0
