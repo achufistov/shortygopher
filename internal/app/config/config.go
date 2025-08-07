@@ -11,6 +11,7 @@ import (
 
 var (
 	addressFlag     = flag.String("a", "localhost:8080", "HTTP server address")
+	grpcAddressFlag = flag.String("grpc", "localhost:9090", "gRPC server address")
 	baseURLFlag     = flag.String("b", "http://localhost:8080", "Base URL for shortened links")
 	fileStoragePath = flag.String("f", "urls.json", "File for storing urls")
 	databaseDSNFlag = flag.String("d", "", "Database connection string")
@@ -41,6 +42,9 @@ var (
 type Config struct {
 	// Address defines the address and port for the HTTP server (e.g., "localhost:8080")
 	Address string `json:"server_address"`
+
+	// GRPCAddress defines the address and port for the gRPC server (e.g., "localhost:9090")
+	GRPCAddress string `json:"grpc_address"`
 
 	// BaseURL defines the base URL for generating shortened links
 	BaseURL string `json:"base_url"`
@@ -95,6 +99,7 @@ func LoadConfig() (*Config, error) {
 	// Initialize config with default values
 	config := &Config{
 		Address:       *addressFlag,
+		GRPCAddress:   *grpcAddressFlag,
 		BaseURL:       *baseURLFlag,
 		FileStorage:   *fileStoragePath,
 		DatabaseDSN:   *databaseDSNFlag,
@@ -133,6 +138,9 @@ func LoadConfig() (*Config, error) {
 	// Override with environment variables
 	if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
 		config.Address = envAddr
+	}
+	if envGRPCAddr := os.Getenv("GRPC_ADDRESS"); envGRPCAddr != "" {
+		config.GRPCAddress = envGRPCAddr
 	}
 	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
 		config.BaseURL = envBaseURL

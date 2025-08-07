@@ -10,6 +10,10 @@ import (
 
 // ExampleLoadConfig demonstrates loading configuration with default settings.
 func ExampleLoadConfig() {
+	// Clear any existing environment variables that might interfere
+	os.Unsetenv("SERVER_ADDRESS")
+	os.Unsetenv("GRPC_ADDRESS")
+	
 	// Create a temporary file with JWT secret for the example
 	tmpfile, err := os.CreateTemp("", "example_secret")
 	if err != nil {

@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package shortener;
+
+option go_package = "github.com/achufistov/shortygopher.git/proto";
+
+// URL Shortener Service
+service ShortenerService {
+  // Shorten URL - creates a shortened URL from original URL
+  rpc ShortenURL(ShortenURLRequest) returns (ShortenURLResponse);
+  
+  // Get URL - retrieves original URL by short ID
+  rpc GetURL(GetURLRequest) returns (GetURLResponse);
+  
+  // Shorten URL Batch - creates multiple shortened URLs at once
+  rpc ShortenURLBatch(ShortenURLBatchRequest) returns (ShortenURLBatchResponse);
+  
+  // Get User URLs - retrieves all URLs created by authenticated user
+  rpc GetUserURLs(GetUserURLsRequest) returns (GetUserURLsResponse);
+  
+  // Delete User URLs - marks URLs for deletion
+  rpc DeleteUserURLs(DeleteUserURLsRequest) returns (DeleteUserURLsResponse);
+  
+  // Ping - health check endpoint
+  rpc Ping(PingRequest) returns (PingResponse);
+  
+  // Get Stats - returns service statistics (internal endpoint)
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+}
+
+// ShortenURLRequest represents a request to shorten a URL
+message ShortenURLRequest {
+  string original_url = 1;
+}
+
+// ShortenURLResponse represents a response with shortened URL
+message ShortenURLResponse {
+  string short_url = 1;
+  bool already_exists = 2;
+}
+
+// GetURLRequest represents a request to get original URL by short ID
+message GetURLRequest {
+  string short_id = 1;
+}
+
+// GetURLResponse represents a response with original URL
+message GetURLResponse {
+  string original_url = 1;
+  bool deleted = 2;
+}
+
+// BatchRequest represents one item in a batch request
+message BatchRequest {
+  string correlation_id = 1;
+  string original_url = 2;
+}
+
+// BatchResponse represents one item in a batch response
+message BatchResponse {
+  string correlation_id = 1;
+  string short_url = 2;
+}
+
+// ShortenURLBatchRequest represents a request to shorten multiple URLs
+message ShortenURLBatchRequest {
+  repeated BatchRequest urls = 1;
+}
+
+// ShortenURLBatchResponse represents a response with multiple shortened URLs
+message ShortenURLBatchResponse {
+  repeated BatchResponse urls = 1;
+}
+
+// UserURL represents a URL created by a user
+message UserURL {
+  string short_url = 1;
+  string original_url = 2;
+}
+
+// GetUserURLsRequest represents a request to get user's URLs
+message GetUserURLsRequest {
+  // Empty request - user ID is extracted from context
+}
+
+// GetUserURLsResponse represents a response with user's URLs
+message GetUserURLsResponse {
+  repeated UserURL urls = 1;
+}
+
+// DeleteUserURLsRequest represents a request to delete user's URLs
+message DeleteUserURLsRequest {
+  repeated string short_urls = 1;
+}
+
+// DeleteUserURLsResponse represents a response for URL deletion
+message DeleteUserURLsResponse {
+  bool success = 1;
+}
+
+// PingRequest represents a health check request
+message PingRequest {
+  // Empty request
+}
+
+// PingResponse represents a health check response
+message PingResponse {
+  bool ok = 1;
+}
+
+// GetStatsRequest represents a request for service statistics
+message GetStatsRequest {
+  // Empty request - access control is handled by middleware
+}
+
+// GetStatsResponse represents a response with service statistics
+message GetStatsResponse {
+  int32 urls = 1;
+  int32 users = 2;
+} 
